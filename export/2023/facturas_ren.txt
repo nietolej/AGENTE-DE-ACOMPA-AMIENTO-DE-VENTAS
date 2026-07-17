@@ -1,0 +1,1 @@
+numfac|item|codart|descrip|cantidad|precio|desc|tot_ren|emision|grupo

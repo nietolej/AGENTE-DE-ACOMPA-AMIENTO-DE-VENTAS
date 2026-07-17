@@ -1,0 +1,1 @@
+numfac|cliente|nomcli|tipo|codven|emision|tot_fac|vence|numped

@@ -1,0 +1,1 @@
+codmovcli|numdoc|tipo|codven|emision|vence|importe|refer|concepto

@@ -1,0 +1,614 @@
+CREATE TABLE public.almacenes (
+  codigo character varying NOT NULL,
+  nombre character varying NOT NULL,
+  ciudad character varying,
+  activo boolean NOT NULL DEFAULT true,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT almacenes_pkey PRIMARY KEY (codigo)
+);
+CREATE TABLE public.productos (
+  codart character varying NOT NULL,
+  nomart text NOT NULL,
+  grupo character varying,
+  nomgruart character varying,
+  marca character varying,
+  nommarart character varying,
+  codfam character varying,
+  precio_a numeric NOT NULL DEFAULT 0,
+  precio_b numeric NOT NULL DEFAULT 0,
+  precio_d numeric NOT NULL DEFAULT 0,
+  activo boolean NOT NULL DEFAULT true,
+  foto_url text,
+  foto_thumb_url text,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  alterno character varying,
+  costo_cpa numeric,
+  CONSTRAINT productos_pkey PRIMARY KEY (codart)
+);
+CREATE TABLE public.stock_almacen (
+  id bigint NOT NULL DEFAULT nextval('stock_almacen_id_seq'::regclass),
+  codart character varying NOT NULL,
+  almacen_codigo character varying NOT NULL,
+  cantidad numeric NOT NULL DEFAULT 0,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT stock_almacen_pkey PRIMARY KEY (id),
+  CONSTRAINT stock_almacen_codart_fkey FOREIGN KEY (codart) REFERENCES public.productos(codart),
+  CONSTRAINT stock_almacen_almacen_codigo_fkey FOREIGN KEY (almacen_codigo) REFERENCES public.almacenes(codigo)
+);
+CREATE TABLE public.referencias_cruzadas (
+  id bigint NOT NULL DEFAULT nextval('referencias_cruzadas_id_seq'::regclass),
+  codart character varying NOT NULL,
+  marca character varying,
+  alterno character varying,
+  ref1 character varying,
+  ref2 character varying,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT referencias_cruzadas_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.vendedores (
+  codvend character varying NOT NULL,
+  nomvend character varying NOT NULL,
+  activo boolean NOT NULL DEFAULT true,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  email character varying,
+  tlf1 character varying,
+  cif character varying,
+  CONSTRAINT vendedores_pkey PRIMARY KEY (codvend)
+);
+CREATE TABLE public.clientes (
+  codcli character varying NOT NULL,
+  nomcli text NOT NULL,
+  cif character varying,
+  vendedor character varying,
+  tlf1 character varying,
+  direc1 text,
+  email character varying,
+  descuento numeric NOT NULL DEFAULT 0,
+  nivel_precio character NOT NULL DEFAULT 'B'::bpchar CHECK (nivel_precio = ANY (ARRAY['A'::bpchar, 'B'::bpchar, 'C'::bpchar])),
+  almacen_codigo character varying,
+  credito_dias smallint NOT NULL DEFAULT 0,
+  credito_limite numeric NOT NULL DEFAULT 0,
+  activo boolean NOT NULL DEFAULT true,
+  bloqueado boolean NOT NULL DEFAULT false,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT clientes_pkey PRIMARY KEY (codcli),
+  CONSTRAINT clientes_almacen_codigo_fkey FOREIGN KEY (almacen_codigo) REFERENCES public.almacenes(codigo)
+);
+CREATE TABLE public.usuarios (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  nombre character varying NOT NULL,
+  email character varying NOT NULL UNIQUE,
+  password_hash text NOT NULL,
+  rol USER-DEFINED NOT NULL,
+  codcli character varying,
+  vendedor_codigo character varying,
+  activo boolean NOT NULL DEFAULT true,
+  ultimo_acceso timestamp with time zone,
+  almacenes_vis ARRAY DEFAULT '{}'::character varying[],
+  lineas_vis ARRAY DEFAULT '{}'::text[],
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid,
+  telefono character varying,
+  password_es_default boolean NOT NULL DEFAULT true,
+  ver_existencia boolean NOT NULL DEFAULT true,
+  existencia_cuantitativa boolean NOT NULL DEFAULT false,
+  correo_contacto character varying,
+  CONSTRAINT usuarios_pkey PRIMARY KEY (id),
+  CONSTRAINT usuarios_codcli_fkey FOREIGN KEY (codcli) REFERENCES public.clientes(codcli),
+  CONSTRAINT usuarios_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.usuarios(id)
+);
+CREATE TABLE public.facturas (
+  numfac character varying NOT NULL,
+  cliente character varying NOT NULL,
+  nomcli text,
+  tipo character varying,
+  codven character varying,
+  emision date NOT NULL,
+  tot_fac numeric NOT NULL DEFAULT 0,
+  vence date,
+  numped character varying,
+  anulada boolean NOT NULL DEFAULT false,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT facturas_pkey PRIMARY KEY (numfac)
+);
+CREATE TABLE public.facturas_detalle (
+  id bigint NOT NULL DEFAULT nextval('facturas_detalle_id_seq'::regclass),
+  numfac character varying NOT NULL,
+  item bigint,
+  codart character varying,
+  descrip text,
+  cantidad numeric,
+  precio numeric,
+  descuento_pct numeric DEFAULT 0,
+  tot_ren numeric,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  grupo character varying,
+  CONSTRAINT facturas_detalle_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.movimientos_inv (
+  id bigint NOT NULL DEFAULT nextval('movimientos_inv_id_seq'::regclass),
+  codmovart character varying NOT NULL,
+  fecha_mov date NOT NULL,
+  tipinv character varying NOT NULL,
+  cantidad numeric NOT NULL,
+  almacen character varying,
+  numdoc character varying,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT movimientos_inv_pkey PRIMARY KEY (id),
+  CONSTRAINT movimientos_inv_almacen_fkey FOREIGN KEY (almacen) REFERENCES public.almacenes(codigo)
+);
+CREATE TABLE public.cobranzas (
+  id bigint NOT NULL DEFAULT nextval('cobranzas_id_seq'::regclass),
+  codmovcli character varying NOT NULL,
+  numdoc character varying,
+  tipo character varying,
+  codven character varying,
+  emision date NOT NULL,
+  vence date,
+  importe numeric NOT NULL,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  refer text,
+  concepto text,
+  CONSTRAINT cobranzas_pkey PRIMARY KEY (id),
+  CONSTRAINT cobranzas_codmovcli_fkey FOREIGN KEY (codmovcli) REFERENCES public.clientes(codcli)
+);
+CREATE TABLE public.pedidos (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  numero bigint NOT NULL DEFAULT nextval('pedidos_numero_seq'::regclass) UNIQUE,
+  codcli character varying NOT NULL,
+  usuario_id uuid NOT NULL,
+  vendedor_codigo character varying,
+  almacen_codigo character varying,
+  estado USER-DEFINED NOT NULL DEFAULT 'borrador'::estado_pedido,
+  subtotal numeric NOT NULL DEFAULT 0,
+  impuesto numeric NOT NULL DEFAULT 0,
+  total numeric NOT NULL DEFAULT 0,
+  notas text,
+  nrofact_dbf character varying,
+  nivel_precio character NOT NULL DEFAULT 'B'::bpchar,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  enviado_at timestamp with time zone,
+  estado_erp USER-DEFINED NOT NULL DEFAULT 'pendiente'::estado_erp_pedido,
+  erp_descargado_at timestamp with time zone,
+  erp_procesado_at timestamp with time zone,
+  CONSTRAINT pedidos_pkey PRIMARY KEY (id),
+  CONSTRAINT pedidos_codcli_fkey FOREIGN KEY (codcli) REFERENCES public.clientes(codcli),
+  CONSTRAINT pedidos_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id),
+  CONSTRAINT pedidos_almacen_codigo_fkey FOREIGN KEY (almacen_codigo) REFERENCES public.almacenes(codigo)
+);
+CREATE TABLE public.pedidos_detalle (
+  id bigint NOT NULL DEFAULT nextval('pedidos_detalle_id_seq'::regclass),
+  pedido_id uuid NOT NULL,
+  codart character varying NOT NULL,
+  descripcion text NOT NULL,
+  cantidad numeric NOT NULL CHECK (cantidad > 0::numeric),
+  precio_unit numeric NOT NULL,
+  subtotal numeric DEFAULT round((cantidad * precio_unit), 2),
+  CONSTRAINT pedidos_detalle_pkey PRIMARY KEY (id),
+  CONSTRAINT pedidos_detalle_pedido_id_fkey FOREIGN KEY (pedido_id) REFERENCES public.pedidos(id),
+  CONSTRAINT pedidos_detalle_codart_fkey FOREIGN KEY (codart) REFERENCES public.productos(codart)
+);
+CREATE TABLE public.pagos_comprobantes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  codcli character varying NOT NULL,
+  usuario_id uuid NOT NULL,
+  pedido_id uuid,
+  nrofact character varying,
+  monto numeric NOT NULL,
+  fecha_pago date NOT NULL,
+  banco character varying,
+  referencia character varying,
+  imagen_url text NOT NULL,
+  estado USER-DEFINED NOT NULL DEFAULT 'pendiente'::estado_pago,
+  notas_admin text,
+  revisado_por uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT pagos_comprobantes_pkey PRIMARY KEY (id),
+  CONSTRAINT pagos_comprobantes_codcli_fkey FOREIGN KEY (codcli) REFERENCES public.clientes(codcli),
+  CONSTRAINT pagos_comprobantes_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id),
+  CONSTRAINT pagos_comprobantes_pedido_id_fkey FOREIGN KEY (pedido_id) REFERENCES public.pedidos(id),
+  CONSTRAINT pagos_comprobantes_revisado_por_fkey FOREIGN KEY (revisado_por) REFERENCES public.usuarios(id)
+);
+CREATE TABLE public.devoluciones (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  codcli character varying NOT NULL,
+  usuario_id uuid NOT NULL,
+  nrofact character varying,
+  pedido_id uuid,
+  motivo text NOT NULL,
+  estado USER-DEFINED NOT NULL DEFAULT 'notificada'::estado_dev,
+  notas_admin text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT devoluciones_pkey PRIMARY KEY (id),
+  CONSTRAINT devoluciones_codcli_fkey FOREIGN KEY (codcli) REFERENCES public.clientes(codcli),
+  CONSTRAINT devoluciones_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id),
+  CONSTRAINT devoluciones_pedido_id_fkey FOREIGN KEY (pedido_id) REFERENCES public.pedidos(id)
+);
+CREATE TABLE public.devoluciones_detalle (
+  id bigint NOT NULL DEFAULT nextval('devoluciones_detalle_id_seq'::regclass),
+  devolucion_id uuid NOT NULL,
+  codart character varying NOT NULL,
+  descripcion character varying NOT NULL,
+  cantidad numeric NOT NULL CHECK (cantidad > 0::numeric),
+  motivo_linea text,
+  CONSTRAINT devoluciones_detalle_pkey PRIMARY KEY (id),
+  CONSTRAINT devoluciones_detalle_devolucion_id_fkey FOREIGN KEY (devolucion_id) REFERENCES public.devoluciones(id),
+  CONSTRAINT devoluciones_detalle_codart_fkey FOREIGN KEY (codart) REFERENCES public.productos(codart)
+);
+CREATE TABLE public.banners (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  titulo character varying,
+  subtitulo text,
+  imagen_url text NOT NULL,
+  enlace_url text,
+  posicion smallint NOT NULL DEFAULT 0,
+  activo boolean NOT NULL DEFAULT true,
+  fecha_desde date,
+  fecha_hasta date,
+  creado_por uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT banners_pkey PRIMARY KEY (id),
+  CONSTRAINT banners_creado_por_fkey FOREIGN KEY (creado_por) REFERENCES public.usuarios(id)
+);
+CREATE TABLE public.novedades (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  titulo character varying NOT NULL,
+  cuerpo text NOT NULL,
+  imagen_url text,
+  publicada boolean NOT NULL DEFAULT false,
+  fecha_pub timestamp with time zone,
+  creado_por uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT novedades_pkey PRIMARY KEY (id),
+  CONSTRAINT novedades_creado_por_fkey FOREIGN KEY (creado_por) REFERENCES public.usuarios(id)
+);
+CREATE TABLE public.sync_log (
+  id bigint NOT NULL DEFAULT nextval('sync_log_id_seq'::regclass),
+  tabla text NOT NULL,
+  estado USER-DEFINED NOT NULL,
+  registros_leidos integer DEFAULT 0,
+  registros_insertados integer DEFAULT 0,
+  registros_actualizados integer DEFAULT 0,
+  registros_error integer DEFAULT 0,
+  error_detail text,
+  duracion_ms integer,
+  started_at timestamp with time zone NOT NULL DEFAULT now(),
+  finished_at timestamp with time zone,
+  CONSTRAINT sync_log_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.grupos (
+  gruart character varying NOT NULL,
+  nomgruart character varying NOT NULL,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT grupos_pkey PRIMARY KEY (gruart)
+);
+CREATE TABLE public.marcas (
+  marart character varying NOT NULL,
+  nommarart character varying NOT NULL,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT marcas_pkey PRIMARY KEY (marart)
+);
+CREATE TABLE public.pagos_detalle (
+  id bigint NOT NULL DEFAULT nextval('pagos_detalle_id_seq'::regclass),
+  codmovcli character varying NOT NULL,
+  numdoc character varying,
+  tipo character varying,
+  emision date,
+  importe numeric,
+  formapag character varying,
+  banco character varying,
+  moneda character varying,
+  tasadolar numeric,
+  numpag character varying,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT pagos_detalle_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.devoluciones_enc (
+  numdevo character varying NOT NULL,
+  cliente character varying,
+  nomcli text,
+  emision date,
+  estatus character varying,
+  numfac character varying,
+  tot_devo numeric,
+  codven character varying,
+  almacen character varying,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT devoluciones_enc_pkey PRIMARY KEY (numdevo)
+);
+CREATE TABLE public.devoluciones_ren (
+  id bigint NOT NULL DEFAULT nextval('devoluciones_ren_id_seq'::regclass),
+  numdevo character varying NOT NULL,
+  item character varying,
+  descrip text,
+  cantidad numeric,
+  factura character varying,
+  importe numeric,
+  precio numeric,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT devoluciones_ren_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.proveedores (
+  codcli character varying NOT NULL,
+  nomcli text,
+  cif character varying,
+  tlf1 character varying,
+  email character varying,
+  activo boolean NOT NULL DEFAULT true,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT proveedores_pkey PRIMARY KEY (codcli)
+);
+CREATE TABLE public.bancos_cat (
+  codban text NOT NULL,
+  nombre text,
+  CONSTRAINT bancos_cat_pkey PRIMARY KEY (codban)
+);
+CREATE TABLE public.bancos_mov (
+  id bigint NOT NULL DEFAULT nextval('bancos_mov_id_seq'::regclass),
+  codmovban text NOT NULL,
+  fecha_mov date,
+  tipban text,
+  numdoc text,
+  concepto text,
+  importe numeric,
+  dimporte numeric,
+  tasadolar numeric,
+  tiporg text,
+  concilia text,
+  CONSTRAINT bancos_mov_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.report_saved (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  owner_id uuid NOT NULL,
+  dataset_id text NOT NULL,
+  nombre character varying NOT NULL,
+  definicion jsonb NOT NULL,
+  alcance text NOT NULL DEFAULT 'personal'::text CHECK (alcance = ANY (ARRAY['personal'::text, 'compartida'::text, 'sistema'::text])),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT report_saved_pkey PRIMARY KEY (id),
+  CONSTRAINT report_saved_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.usuarios(id)
+);
+CREATE TABLE public.report_audit (
+  id bigint NOT NULL DEFAULT nextval('report_audit_id_seq'::regclass),
+  user_id uuid,
+  dataset_id text NOT NULL,
+  definicion jsonb,
+  filas integer,
+  duracion_ms integer,
+  exporto boolean NOT NULL DEFAULT false,
+  formato text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT report_audit_pkey PRIMARY KEY (id),
+  CONSTRAINT report_audit_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.usuarios(id)
+);
+CREATE TABLE public.inv_transito (
+  id bigint NOT NULL DEFAULT nextval('inv_transito_id_seq'::regclass),
+  codart character varying NOT NULL,
+  emision date,
+  pend_desp numeric NOT NULL DEFAULT 0,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT inv_transito_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.inv_produccion (
+  id bigint NOT NULL DEFAULT nextval('inv_produccion_id_seq'::regclass),
+  codart character varying NOT NULL,
+  cantidad numeric NOT NULL DEFAULT 0,
+  despacho numeric NOT NULL DEFAULT 0,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT inv_produccion_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.audit_logs (
+  id bigint NOT NULL DEFAULT nextval('audit_logs_id_seq'::regclass),
+  actor_id uuid,
+  actor_email text,
+  accion text NOT NULL,
+  entidad text,
+  entidad_id text,
+  detalle jsonb,
+  ip text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT audit_logs_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.error_logs (
+  id bigint NOT NULL DEFAULT nextval('error_logs_id_seq'::regclass),
+  origen USER-DEFINED NOT NULL,
+  mensaje text NOT NULL,
+  stack text,
+  ruta text,
+  metodo character varying,
+  status_code integer,
+  usuario_id uuid,
+  usuario_email text,
+  usuario_rol text,
+  detalle jsonb,
+  ip text,
+  resuelto boolean NOT NULL DEFAULT false,
+  notificado boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT error_logs_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.erp_transitos_enc (
+  numreq character varying NOT NULL,
+  numtra character varying,
+  emision date,
+  provee character varying,
+  nomprv character varying,
+  estatus character varying,
+  almacen character varying,
+  moneda character varying,
+  cambio numeric NOT NULL DEFAULT 0,
+  comentario text,
+  fecha_orde date,
+  fecha_desp date,
+  fecha_rece date,
+  naviera character varying,
+  contenedores smallint NOT NULL DEFAULT 0,
+  total_orde numeric NOT NULL DEFAULT 0,
+  total_desp numeric NOT NULL DEFAULT 0,
+  costo_flet numeric NOT NULL DEFAULT 0,
+  costo_naci numeric NOT NULL DEFAULT 0,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT erp_transitos_enc_pkey PRIMARY KEY (numreq)
+);
+CREATE TABLE public.erp_transitos_ren (
+  id bigint NOT NULL DEFAULT nextval('erp_transitos_ren_id_seq'::regclass),
+  numreq character varying NOT NULL,
+  numord character varying,
+  codart character varying NOT NULL,
+  descrip character varying,
+  unidad character varying,
+  cantidad numeric NOT NULL DEFAULT 0,
+  costo numeric NOT NULL DEFAULT 0,
+  costo_cif numeric NOT NULL DEFAULT 0,
+  costo_dola numeric NOT NULL DEFAULT 0,
+  costo_tot numeric NOT NULL DEFAULT 0,
+  cantdesp numeric NOT NULL DEFAULT 0,
+  penddesp numeric NOT NULL DEFAULT 0,
+  estatus character varying,
+  emision date,
+  provee character varying,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT erp_transitos_ren_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.erp_recepciones (
+  numreq character varying NOT NULL,
+  numtra character varying,
+  emision date,
+  provee character varying,
+  nomprv character varying,
+  estatus character varying,
+  almacen character varying,
+  tot_req numeric NOT NULL DEFAULT 0,
+  moneda character varying,
+  cambio numeric NOT NULL DEFAULT 0,
+  gastos numeric NOT NULL DEFAULT 0,
+  factor numeric NOT NULL DEFAULT 0,
+  fecha_rece date,
+  synced_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT erp_recepciones_pkey PRIMARY KEY (numreq)
+);
+CREATE TABLE public.importaciones (
+  id bigint NOT NULL DEFAULT nextval('importaciones_id_seq'::regclass),
+  codigo character varying,
+  bl character varying,
+  naviera character varying,
+  buque character varying,
+  viaje character varying,
+  puerto_origen character varying,
+  puerto_destino character varying,
+  etd date,
+  eta date,
+  eta_inicial date,
+  estado character varying NOT NULL DEFAULT 'consolidando'::character varying CHECK (estado::text = ANY (ARRAY['consolidando'::character varying, 'en_agua'::character varying, 'puerto'::character varying, 'aduana'::character varying, 'recibido'::character varying, 'cancelado'::character varying]::text[])),
+  notas text,
+  tracking_proveedor character varying,
+  tracking_ultimo_at timestamp with time zone,
+  creado_por uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  eta_confirmada_at timestamp with time zone,
+  CONSTRAINT importaciones_pkey PRIMARY KEY (id),
+  CONSTRAINT importaciones_creado_por_fkey FOREIGN KEY (creado_por) REFERENCES public.usuarios(id)
+);
+CREATE TABLE public.importaciones_transitos (
+  importacion_id bigint NOT NULL,
+  numreq character varying NOT NULL UNIQUE,
+  CONSTRAINT importaciones_transitos_pkey PRIMARY KEY (importacion_id, numreq),
+  CONSTRAINT importaciones_transitos_importacion_id_fkey FOREIGN KEY (importacion_id) REFERENCES public.importaciones(id)
+);
+CREATE TABLE public.importaciones_eventos (
+  id bigint NOT NULL DEFAULT nextval('importaciones_eventos_id_seq'::regclass),
+  importacion_id bigint NOT NULL,
+  tipo character varying NOT NULL CHECK (tipo::text = ANY (ARRAY['creacion'::character varying, 'eta_cambio'::character varying, 'estado'::character varying, 'nota'::character varying, 'tracking'::character varying, 'permiso'::character varying, 'documento'::character varying]::text[])),
+  detalle text,
+  eta_anterior date,
+  eta_nueva date,
+  usuario character varying,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT importaciones_eventos_pkey PRIMARY KEY (id),
+  CONSTRAINT importaciones_eventos_importacion_id_fkey FOREIGN KEY (importacion_id) REFERENCES public.importaciones(id)
+);
+CREATE TABLE public.importaciones_documentos (
+  id bigint NOT NULL DEFAULT nextval('importaciones_documentos_id_seq'::regclass),
+  importacion_id bigint NOT NULL,
+  tipo character varying NOT NULL DEFAULT 'otro'::character varying CHECK (tipo::text = ANY (ARRAY['proforma'::character varying, 'bl'::character varying, 'packing'::character varying, 'permiso'::character varying, 'planilla'::character varying, 'otro'::character varying]::text[])),
+  nombre character varying NOT NULL,
+  url text NOT NULL,
+  mimetype character varying,
+  subido_por character varying,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT importaciones_documentos_pkey PRIMARY KEY (id),
+  CONSTRAINT importaciones_documentos_importacion_id_fkey FOREIGN KEY (importacion_id) REFERENCES public.importaciones(id)
+);
+CREATE TABLE public.importaciones_permisos (
+  id bigint NOT NULL DEFAULT nextval('importaciones_permisos_id_seq'::regclass),
+  importacion_id bigint NOT NULL,
+  tipo character varying NOT NULL,
+  estatus character varying NOT NULL DEFAULT 'por_solicitar'::character varying CHECK (estatus::text = ANY (ARRAY['por_solicitar'::character varying, 'solicitado'::character varying, 'aprobado'::character varying, 'rechazado'::character varying]::text[])),
+  referencia character varying,
+  fecha_solicitud date,
+  fecha_aprobacion date,
+  notas text,
+  documento_id bigint,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT importaciones_permisos_pkey PRIMARY KEY (id),
+  CONSTRAINT importaciones_permisos_importacion_id_fkey FOREIGN KEY (importacion_id) REFERENCES public.importaciones(id),
+  CONSTRAINT importaciones_permisos_documento_id_fkey FOREIGN KEY (documento_id) REFERENCES public.importaciones_documentos(id)
+);
+CREATE TABLE public.importaciones_items (
+  importacion_id bigint NOT NULL,
+  codart character varying NOT NULL,
+  requiere_permiso boolean NOT NULL DEFAULT false,
+  codigo_arancelario character varying,
+  permiso_id bigint,
+  notas character varying,
+  CONSTRAINT importaciones_items_pkey PRIMARY KEY (importacion_id, codart),
+  CONSTRAINT importaciones_items_importacion_id_fkey FOREIGN KEY (importacion_id) REFERENCES public.importaciones(id),
+  CONSTRAINT importaciones_items_permiso_id_fkey FOREIGN KEY (permiso_id) REFERENCES public.importaciones_permisos(id)
+);
+CREATE TABLE public.importaciones_impuestos (
+  id bigint NOT NULL DEFAULT nextval('importaciones_impuestos_id_seq'::regclass),
+  importacion_id bigint NOT NULL,
+  concepto character varying NOT NULL,
+  base numeric,
+  tasa numeric,
+  monto_estimado numeric NOT NULL DEFAULT 0,
+  monto_real numeric,
+  notas character varying,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT importaciones_impuestos_pkey PRIMARY KEY (id),
+  CONSTRAINT importaciones_impuestos_importacion_id_fkey FOREIGN KEY (importacion_id) REFERENCES public.importaciones(id)
+);
+CREATE TABLE public.importaciones_gastos (
+  id bigint NOT NULL DEFAULT nextval('importaciones_gastos_id_seq'::regclass),
+  importacion_id bigint,
+  fecha date NOT NULL DEFAULT CURRENT_DATE,
+  total_factura numeric NOT NULL DEFAULT 0,
+  flete numeric NOT NULL DEFAULT 0,
+  impuesto_usd numeric NOT NULL DEFAULT 0,
+  tasa_oficial numeric NOT NULL DEFAULT 0,
+  tasa_paralela numeric NOT NULL DEFAULT 0,
+  otros_gastos numeric NOT NULL DEFAULT 0,
+  impuesto_real numeric NOT NULL DEFAULT 0,
+  total_gastos numeric NOT NULL DEFAULT 0,
+  pct_gastos numeric NOT NULL DEFAULT 0,
+  reparto jsonb NOT NULL DEFAULT '[]'::jsonb,
+  creado_por character varying,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  nombre character varying,
+  CONSTRAINT importaciones_gastos_pkey PRIMARY KEY (id),
+  CONSTRAINT importaciones_gastos_importacion_id_fkey FOREIGN KEY (importacion_id) REFERENCES public.importaciones(id)
+);
