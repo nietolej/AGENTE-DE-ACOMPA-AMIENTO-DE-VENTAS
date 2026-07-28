@@ -1,14 +1,39 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { ComparisonData } from '@/lib/types';
+import { ComparisonData, formatDateDisplay } from '@/lib/types';
 import { StatementTable } from '@/components/ui/StatementTable';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#a288fe'];
 
 export default function CompareView({ data }: { data: ComparisonData }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  const initialStartA = searchParams.get('startA') || '2024-01-01';
+  const initialEndA = searchParams.get('endA') || '2024-12-31';
+  const initialStartB = searchParams.get('startB') || '2025-01-01';
+  const initialEndB = searchParams.get('endB') || '2025-12-31';
+
+  const [startA, setStartA] = useState(initialStartA);
+  const [endA, setEndA] = useState(initialEndA);
+  const [startB, setStartB] = useState(initialStartB);
+  const [endB, setEndB] = useState(initialEndB);
+
+  const handleApplyComparison = () => {
+    const query = new URLSearchParams(searchParams.toString());
+    query.set('tab', 'comparacion');
+    query.set('startA', startA);
+    query.set('endA', endA);
+    query.set('startB', startB);
+    query.set('endB', endB);
+    router.push(`${pathname}?${query.toString()}`);
+  };
+
   // Helpers para calcular varianzas visuales
   const renderVarianza = (abs: number, pct: number, isGoodWhenUp: boolean = true) => {
     let isPositive = pct > 0;
@@ -44,20 +69,6 @@ export default function CompareView({ data }: { data: ComparisonData }) {
   const iDevPedidosA = data.periodoA.pedidos_compra > 0 ? (data.periodoA.devoluciones_pedidos / data.periodoA.pedidos_compra) * 100 : 0;
   const iDevPedidosB = data.periodoB.pedidos_compra > 0 ? (data.periodoB.devoluciones_pedidos / data.periodoB.pedidos_compra) * 100 : 0;
 
-  // Fechas dinámicas por defecto (Periodo B: últimos 3 meses, Periodo A: 3 meses anteriores)
-  const today = new Date();
-  const threeMonthsAgo = new Date(today);
-  threeMonthsAgo.setMonth(today.getMonth() - 3);
-  const sixMonthsAgo = new Date(today);
-  sixMonthsAgo.setMonth(today.getMonth() - 6);
-
-  const formatDate = (d: Date) => d.toISOString().split('T')[0];
-
-  const defaultBStart = formatDate(threeMonthsAgo);
-  const defaultBEnd = formatDate(today);
-  const defaultAStart = formatDate(sixMonthsAgo);
-  const defaultAEnd = formatDate(threeMonthsAgo);
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       
@@ -66,20 +77,20 @@ export default function CompareView({ data }: { data: ComparisonData }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           <label className="text-sub" style={{ fontWeight: 'bold' }}>Periodo A (Base)</label>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <input type="date" defaultValue={defaultAStart} style={{ padding: '0.5rem', borderRadius: '4px', backgroundColor: '#111', color: 'white', border: '1px solid var(--glass-border)' }} />
-            <input type="date" defaultValue={defaultAEnd} style={{ padding: '0.5rem', borderRadius: '4px', backgroundColor: '#111', color: 'white', border: '1px solid var(--glass-border)' }} />
+            <input type="date" value={startA} onChange={(e) => setStartA(e.target.value)} style={{ padding: '0.5rem', borderRadius: '4px', backgroundColor: '#111', color: 'white', border: '1px solid var(--glass-border)' }} />
+            <input type="date" value={endA} onChange={(e) => setEndA(e.target.value)} style={{ padding: '0.5rem', borderRadius: '4px', backgroundColor: '#111', color: 'white', border: '1px solid var(--glass-border)' }} />
           </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           <label className="text-sub" style={{ fontWeight: 'bold' }}>Periodo B (Comparar vs Base)</label>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <input type="date" defaultValue={defaultBStart} style={{ padding: '0.5rem', borderRadius: '4px', backgroundColor: '#111', color: 'white', border: '1px solid var(--glass-border)' }} />
-            <input type="date" defaultValue={defaultBEnd} style={{ padding: '0.5rem', borderRadius: '4px', backgroundColor: '#111', color: 'white', border: '1px solid var(--glass-border)' }} />
+            <input type="date" value={startB} onChange={(e) => setStartB(e.target.value)} style={{ padding: '0.5rem', borderRadius: '4px', backgroundColor: '#111', color: 'white', border: '1px solid var(--glass-border)' }} />
+            <input type="date" value={endB} onChange={(e) => setEndB(e.target.value)} style={{ padding: '0.5rem', borderRadius: '4px', backgroundColor: '#111', color: 'white', border: '1px solid var(--glass-border)' }} />
           </div>
         </div>
 
-        <button style={{ padding: '0.65rem 1.5rem', backgroundColor: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
+        <button onClick={handleApplyComparison} style={{ padding: '0.65rem 1.5rem', backgroundColor: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
           Aplicar Comparación
         </button>
       </div>
@@ -249,12 +260,12 @@ export default function CompareView({ data }: { data: ComparisonData }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
         <div className="glass-panel">
           <h3 className="text-sub" style={{ marginBottom: '1rem' }}>Última Compra (Global)</h3>
-          <p style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{data.ultima_compra}</p>
+          <p style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{formatDateDisplay(data.ultima_compra)}</p>
         </div>
         <div className="glass-panel">
           <h3 className="text-sub" style={{ marginBottom: '1rem' }}>Condiciones Globales</h3>
           <p><strong>Deuda Actual:</strong> <span className="text-danger">${data.deuda_actual.toLocaleString('en-US')}</span></p>
-          <p><strong>Fecha Vencimiento CxC:</strong> <span>{data.vencimiento_cxc}</span></p>
+          <p><strong>Fecha Vencimiento CxC:</strong> <span>{formatDateDisplay(data.vencimiento_cxc)}</span></p>
         </div>
       </div>
 

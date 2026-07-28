@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import Navigation from '@/components/Navigation';
 import { getGlobalOverviewYear, getGlobalHistorical } from '../../lib/queries/clientes';
 import { getTopItems } from '../../lib/queries/articulos';
 import YearView from './[codcli]/YearView';
@@ -18,11 +19,12 @@ export default async function GlobalDashboardPage({
 }) {
   const resolvedSearchParams = await searchParams;
   const tab = typeof resolvedSearchParams.tab === 'string' ? resolvedSearchParams.tab : 'anio';
-  let year: number | 'todos' = 'todos';
-  if (resolvedSearchParams.year && resolvedSearchParams.year !== 'todos') {
-    year = parseInt(typeof resolvedSearchParams.year === 'string' ? resolvedSearchParams.year : new Date().getFullYear().toString(), 10);
-  } else if (!resolvedSearchParams.year) {
-    year = new Date().getFullYear();
+  let year: string = 'todos';
+  const paramYear = resolvedSearchParams.year;
+  if (paramYear) {
+    year = Array.isArray(paramYear) ? paramYear.join(',') : paramYear;
+  } else {
+    year = new Date().getFullYear().toString();
   }
   const incluirInactivos = resolvedSearchParams.inactivos === 'true';
 
@@ -45,15 +47,26 @@ export default async function GlobalDashboardPage({
   } else if (tab === 'historico') {
     content = <HistoryView data={dataHist} />;
   } else if (tab === 'comparacion') {
-    // Para el global, por ahora usamos el mock global o la firma de comparación (que retorna mock)
+    const startA = typeof resolvedSearchParams.startA === 'string' ? resolvedSearchParams.startA : '2024-01-01';
+    const endA = typeof resolvedSearchParams.endA === 'string' ? resolvedSearchParams.endA : '2024-12-31';
+    const startB = typeof resolvedSearchParams.startB === 'string' ? resolvedSearchParams.startB : '2025-01-01';
+    const endB = typeof resolvedSearchParams.endB === 'string' ? resolvedSearchParams.endB : '2025-12-31';
+
     const { getClientComparison } = await import('../../lib/queries/clientes');
-    const dataComp = await getClientComparison('GLOBAL', {start: '2026-01-01', end: '2026-03-31'}, {start: '2026-04-01', end: '2026-06-30'});
+    const dataComp = await getClientComparison(
+      'GLOBAL', 
+      {start: startA, end: endA}, 
+      {start: startB, end: endB},
+      incluirInactivos
+    );
     content = <CompareView data={dataComp} />;
   }
 
   return (
-    <div className="container">
+    <div className="container" style={{ paddingTop: '1.5rem', paddingBottom: '3rem' }}>
+      <Navigation />
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
+
         <div style={{ flex: 1, marginRight: '2rem' }}>
           <Link href="/" style={{ color: 'var(--accent-primary)', textDecoration: 'none', marginBottom: '0.5rem', display: 'inline-block' }}>&larr; Volver al Inicio</Link>
           <div className="glass-panel" style={{ padding: '1.5rem', marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>

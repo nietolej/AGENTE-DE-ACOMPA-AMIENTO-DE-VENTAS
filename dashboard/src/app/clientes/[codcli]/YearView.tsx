@@ -6,7 +6,7 @@ import {
   PieChart, Pie, Cell
 } from 'recharts';
 import { Package, DollarSign, AlertCircle, Target, ShoppingCart, Percent, CreditCard, Clock, Lightbulb } from 'lucide-react';
-import { CustomerKPIs } from '@/lib/types';
+import { CustomerKPIs, formatDateDisplay } from '@/lib/types';
 import { KpiCard } from '@/components/ui/KpiCard';
 import { StatementTable } from '@/components/ui/StatementTable';
 
@@ -156,14 +156,14 @@ export default function YearView({ data }: { data: CustomerKPIs }) {
            {data.vencimiento_cxc && (
              <KpiCard 
                title="Vencimiento CxC" 
-               value={data.vencimiento_cxc}
+               value={formatDateDisplay(data.vencimiento_cxc)}
                icon={<Clock size={20} color="var(--accent-danger)" />}
              />
            )}
            {data.ultima_compra && (
              <KpiCard 
                title="Última Compra" 
-               value={data.ultima_compra}
+               value={formatDateDisplay(data.ultima_compra)}
                icon={<ShoppingCart size={20} color="var(--text-secondary)" />}
              />
            )}
@@ -178,17 +178,23 @@ export default function YearView({ data }: { data: CustomerKPIs }) {
         <div className="glass-panel" style={{ height: '400px' }}>
           <h3>Evolución Mensual (Ventas vs Devoluciones)</h3>
           <div style={{ width: '100%', height: '90%', marginTop: '1rem' }}>
-            <ResponsiveContainer>
-              <BarChart data={data.ventas_mensuales} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                <XAxis dataKey="mes" stroke="#888" />
-                <YAxis stroke="#888" />
-                <RechartsTooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333' }} />
-                <Legend />
-                <Bar dataKey="ventas" stackId="a" fill="var(--accent-primary)" name="Ventas ($)" />
-                <Bar dataKey="devoluciones" stackId="a" fill="var(--accent-danger)" name="Devoluciones ($)" />
-              </BarChart>
-            </ResponsiveContainer>
+            {data.ventas_mensuales && data.ventas_mensuales.some(m => m.ventas > 0 || m.devoluciones > 0) ? (
+              <ResponsiveContainer>
+                <BarChart data={data.ventas_mensuales} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                  <XAxis dataKey="mes" stroke="#888" />
+                  <YAxis stroke="#888" />
+                  <RechartsTooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333' }} />
+                  <Legend />
+                  <Bar dataKey="ventas" stackId="a" fill="var(--accent-primary)" name="Ventas ($)" />
+                  <Bar dataKey="devoluciones" stackId="a" fill="var(--accent-danger)" name="Devoluciones ($)" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>
+                Sin registros de ventas o devoluciones en el periodo seleccionado
+              </div>
+            )}
           </div>
         </div>
 
@@ -196,26 +202,32 @@ export default function YearView({ data }: { data: CustomerKPIs }) {
         <div className="glass-panel" style={{ height: '400px' }}>
           <h3>Porcentaje de Pagos (Moneda/Vía)</h3>
           <div style={{ width: '100%', height: '90%', marginTop: '1rem' }}>
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie
-                  data={data.mix_pagos}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={80}
-                  outerRadius={120}
-                  paddingAngle={5}
-                  dataKey="monto"
-                  nameKey="moneda"
-                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(1)}%)`}
-                >
-                  {data.mix_pagos.map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <RechartsTooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333' }} />
-              </PieChart>
-            </ResponsiveContainer>
+            {data.mix_pagos && data.mix_pagos.length > 0 ? (
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie
+                    data={data.mix_pagos}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={80}
+                    outerRadius={120}
+                    paddingAngle={5}
+                    dataKey="monto"
+                    nameKey="moneda"
+                    label={({ name, percent }: { name?: string; percent?: number }) => `${name || ''} (${((percent || 0) * 100).toFixed(1)}%)`}
+                  >
+                    {data.mix_pagos.map((entry: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>
+                Sin registros de pagos en el periodo seleccionado
+              </div>
+            )}
           </div>
         </div>
       </div>

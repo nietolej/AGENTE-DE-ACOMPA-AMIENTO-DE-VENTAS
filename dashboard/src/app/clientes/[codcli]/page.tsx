@@ -1,3 +1,4 @@
+import { formatDateDisplay } from '@/lib/types';
 import Link from 'next/link';
 import { getClientInfo, getClientOverviewYear, getClientHistorical, getClientComparison } from '../../../lib/queries/clientes';
 import { getTopItems } from '../../../lib/queries/articulos';
@@ -16,18 +17,19 @@ export default async function ClientePage({
   searchParams 
 }: { 
   params: Promise<{ codcli: string }>,
-  searchParams: Promise<{ tab?: string, year?: string, inactivos?: string }>
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const resolvedParams = await params;
   const resolvedSearchParams = await searchParams;
   
   const { codcli } = resolvedParams;
   const tab = typeof resolvedSearchParams.tab === 'string' ? resolvedSearchParams.tab : 'anio';
-  let year: number | 'todos' = 'todos';
-  if (resolvedSearchParams.year && resolvedSearchParams.year !== 'todos') {
-    year = parseInt(typeof resolvedSearchParams.year === 'string' ? resolvedSearchParams.year : new Date().getFullYear().toString(), 10);
-  } else if (!resolvedSearchParams.year) {
-    year = new Date().getFullYear();
+  let year: string = 'todos';
+  const paramYear = resolvedSearchParams.year;
+  if (paramYear) {
+    year = Array.isArray(paramYear) ? paramYear.join(',') : paramYear;
+  } else {
+    year = new Date().getFullYear().toString();
   }
 
   const incluirInactivos = resolvedSearchParams.inactivos === 'true';
@@ -48,16 +50,26 @@ export default async function ClientePage({
     const dataAnio = await getClientOverviewYear(realCodcli, year, incluirInactivos);
     content = <YearView data={dataAnio} />;
 
-    // Fetch Top 10 para este cliente
-    const topCantidad = await getTopItems(year, 10, 'cantidad', realCodcli, incluirInactivos);
-    const topMonto = await getTopItems(year, 10, 'monto', realCodcli, incluirInactivos);
+    // Fetch Top ítems para este cliente
+    const topCantidad = await getTopItems(year, 100, 'cantidad', realCodcli, incluirInactivos);
+    const topMonto = await getTopItems(year, 100, 'monto', realCodcli, incluirInactivos);
     topItemsData = { topCantidad, topMonto };
 
   } else if (tab === 'historico') {
     const dataHistTab = await getClientHistorical(realCodcli, incluirInactivos);
     content = <HistoryView data={dataHistTab} />;
   } else if (tab === 'comparacion') {
-    const dataComp = await getClientComparison(realCodcli, {start: '2026-01-01', end: '2026-03-31'}, {start: '2026-04-01', end: '2026-06-30'});
+    const startA = typeof resolvedSearchParams.startA === 'string' ? resolvedSearchParams.startA : '2024-01-01';
+    const endA = typeof resolvedSearchParams.endA === 'string' ? resolvedSearchParams.endA : '2024-12-31';
+    const startB = typeof resolvedSearchParams.startB === 'string' ? resolvedSearchParams.startB : '2025-01-01';
+    const endB = typeof resolvedSearchParams.endB === 'string' ? resolvedSearchParams.endB : '2025-12-31';
+
+    const dataComp = await getClientComparison(
+      realCodcli, 
+      {start: startA, end: endA}, 
+      {start: startB, end: endB},
+      incluirInactivos
+    );
     content = <CompareView data={dataComp} />;
   }
 
@@ -73,7 +85,7 @@ export default async function ClientePage({
               <div><strong>Código:</strong> {realCodcli}</div>
               <div><strong>RIF:</strong> {clientInfo.rif}</div>
               <div><strong>Vendedor:</strong> {clientInfo.vendedor_nombre}</div>
-              <div><strong>Última Compra:</strong> {dataHist.total_historico.ultima_compra}</div>
+              <div><strong>Última Compra:</strong> {formatDateDisplay(dataHist.total_historico.ultima_compra)}</div>
             </div>
             <div style={{ color: 'var(--text-secondary)' }}>
               <strong>Dirección:</strong> {clientInfo.direccion}

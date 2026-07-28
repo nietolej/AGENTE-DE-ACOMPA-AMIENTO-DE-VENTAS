@@ -6,7 +6,7 @@ const cache = new Map<string, { time: number, data: any[] }>();
 const CACHE_TTL = 1000 * 60; // 1 minuto de cache (evita relanzar FS por cada query interna)
 
 export async function parseTxtFile(filename: string): Promise<any[]> {
-  const exportDir = path.join(process.cwd(), '../export');
+  const exportDir = path.join(process.cwd(), process.env.DATA_DIR || '../export');
   
   if (cache.has(filename)) {
     const cached = cache.get(filename)!;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { FacturaEstadoCuenta } from '@/lib/types';
+import { FacturaEstadoCuenta, formatDateDisplay } from '@/lib/types';
 
 interface StatementTableProps {
   data: FacturaEstadoCuenta[];
@@ -31,7 +31,7 @@ export function StatementTable({ data }: StatementTableProps) {
                     <td style={{ padding: '1rem' }}>${factura.deuda_original.toLocaleString('en-US')}</td>
                     <td style={{ padding: '1rem', color: 'var(--accent-success)' }}>${factura.abonado.toLocaleString('en-US')}</td>
                     <td style={{ padding: '1rem', color: 'var(--accent-danger)' }}>${factura.saldo.toLocaleString('en-US')}</td>
-                    <td style={{ padding: '1rem' }}>{factura.vencimiento}</td>
+                    <td style={{ padding: '1rem' }}>{formatDateDisplay(factura.vencimiento)}</td>
                     <td style={{ padding: '1rem' }}>
                       <span style={{ 
                         padding: '0.3rem 0.6rem', 

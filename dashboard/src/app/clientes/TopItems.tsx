@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { formatDateDisplay } from '@/lib/types';
 
 type Item = { 
   descrip: string, 
@@ -19,46 +20,79 @@ interface TopItemsProps {
 
 export default function TopItems({ topByCantidad, topByMonto, isGlobal }: TopItemsProps) {
   const [orderBy, setOrderBy] = useState<'cantidad' | 'monto'>('monto');
-  const items = orderBy === 'cantidad' ? topByCantidad : topByMonto;
+  const [limit, setLimit] = useState<number>(10);
+
+  const rawItems = orderBy === 'cantidad' ? topByCantidad : topByMonto;
+  const items = limit === 0 ? rawItems : rawItems.slice(0, limit);
+  const currentCount = items.length;
 
   return (
     <div className="glass-panel" style={{ marginTop: '2rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h2>🏆 Top {isGlobal ? '100' : '10'} Ítems Más Vendidos</h2>
+          <h2>🏆 Top {currentCount} Ítems Más Vendidos</h2>
           <p className="text-sub">Productos con mayor rotación en el periodo seleccionado.</p>
         </div>
         
-        {/* Toggle Switch */}
-        <div style={{ display: 'flex', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: '8px', padding: '4px' }}>
-          <button 
-            onClick={() => setOrderBy('monto')}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: orderBy === 'monto' ? 'var(--accent-primary)' : 'transparent',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: orderBy === 'monto' ? 'bold' : 'normal'
-            }}
-          >
-            Por Facturación ($)
-          </button>
-          <button 
-            onClick={() => setOrderBy('cantidad')}
-            style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: orderBy === 'cantidad' ? 'var(--accent-primary)' : 'transparent',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: orderBy === 'cantidad' ? 'bold' : 'normal'
-            }}
-          >
-            Por Cantidad (Unds)
-          </button>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Limit Selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Mostrar Top:</span>
+            <select 
+              value={limit} 
+              onChange={(e) => setLimit(Number(e.target.value))}
+              style={{
+                backgroundColor: 'rgba(0,0,0,0.6)',
+                color: 'white',
+                border: '1px solid var(--glass-border)',
+                borderRadius: '6px',
+                padding: '0.45rem 0.8rem',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                outline: 'none'
+              }}
+            >
+              <option value={5}>Top 5</option>
+              <option value={10}>Top 10</option>
+              <option value={15}>Top 15</option>
+              <option value={20}>Top 20</option>
+              <option value={50}>Top 50</option>
+              <option value={100}>Top 100</option>
+              <option value={0}>Todos ({rawItems.length})</option>
+            </select>
+          </div>
+
+          {/* Toggle Switch */}
+          <div style={{ display: 'flex', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: '8px', padding: '4px' }}>
+            <button 
+              onClick={() => setOrderBy('monto')}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: orderBy === 'monto' ? 'var(--accent-primary)' : 'transparent',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: orderBy === 'monto' ? 'bold' : 'normal'
+              }}
+            >
+              Por Facturación ($)
+            </button>
+            <button 
+              onClick={() => setOrderBy('cantidad')}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: orderBy === 'cantidad' ? 'var(--accent-primary)' : 'transparent',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: orderBy === 'cantidad' ? 'bold' : 'normal'
+              }}
+            >
+              Por Cantidad (Unds)
+            </button>
+          </div>
         </div>
       </div>
 
@@ -86,7 +120,7 @@ export default function TopItems({ topByCantidad, topByMonto, isGlobal }: TopIte
                   {item.descrip}
                 </td>
                 <td style={{ padding: '1rem', textAlign: 'right', color: 'var(--text-secondary)' }}>
-                  {item.ultima_venta}
+                  {formatDateDisplay(item.ultima_venta)}
                 </td>
                 <td style={{ padding: '1rem', textAlign: 'right', color: 'var(--error)' }}>
                   {orderBy === 'cantidad' 
