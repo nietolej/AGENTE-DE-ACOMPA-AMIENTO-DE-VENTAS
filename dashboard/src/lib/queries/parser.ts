@@ -3,7 +3,7 @@ import path from 'path';
 
 // Utilidad para mantener un cache en memoria por request/tiempo para no leer el archivo cientos de veces
 const cache = new Map<string, { time: number, data: any[] }>();
-const CACHE_TTL = 0; // Force re-read every time (no cache)
+const CACHE_TTL = 1000 * 60; // 60 segundos de cache
 
 export async function parseTxtFile(filename: string): Promise<any[]> {
   const exportDir = path.join(process.cwd(), process.env.DATA_DIR || '../export');
@@ -63,7 +63,13 @@ export async function parseTxtFile(filename: string): Promise<any[]> {
         const values = lines[i].split('|');
         const obj: any = {};
         for (let j = 0; j < headers.length; j++) {
-          obj[headers[j]] = values[j] ? values[j].trim() : '';
+          let val = values[j] ? values[j].trim() : '';
+          // Normalize comma-decimal to dot-decimal (e.g. "819,91" -> "819.91")
+          // Only applies when string looks like a number with comma as decimal separator
+          if (val && /^-?\d+,\d+$/.test(val)) {
+            val = val.replace(',', '.');
+          }
+          obj[headers[j]] = val;
         }
         allData.push(obj);
       }
