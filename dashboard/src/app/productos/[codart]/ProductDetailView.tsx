@@ -1,18 +1,20 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import {
   Package, DollarSign, ArrowLeft, RefreshCw, ShoppingCart, Percent,
-  AlertTriangle, Truck, Factory, Users, Calendar, TrendingUp, Download, Building2, BarChart2
+  AlertTriangle, Truck, Factory, Users, Calendar, TrendingUp, Download, Building2, BarChart2, Activity
 } from 'lucide-react';
-import { ProductDetail, ProductCompareData, ProductWarehouseStock } from '@/lib/types';
+import { ProductDetail, ProductCompareData, ProductWarehouseStock, ProductMovementsResponse, ProductKardexRow, formatDateDisplay } from '@/lib/types';
 import { KpiCard } from '@/components/ui/KpiCard';
 import ProductCompareView from './ProductCompareView';
+import ProductKardexView from './ProductKardexView';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface Props {
   data: ProductDetail;
@@ -22,6 +24,8 @@ interface Props {
   yearB: string;
   compareData: ProductCompareData | null;
   warehouseStock: ProductWarehouseStock[];
+  movementsData?: ProductMovementsResponse | null;
+  kardexData?: ProductKardexRow[] | null;
 }
 
 export default function ProductDetailView({
@@ -31,9 +35,25 @@ export default function ProductDetailView({
   yearA,
   yearB,
   compareData,
-  warehouseStock
+  warehouseStock,
+  movementsData,
+  kardexData
 }: Props) {
   const router = useRouter();
+  
+  const [selectedWarehouses, setSelectedWarehouses] = useState<string[]>(['01', '06', '03']);
+  const [selectedTypes, setSelectedTypes] = useState({
+    Recepcion: true,
+    AJU: true,
+    D: true,
+    TR: true,
+    NC: true
+  });
+  const [topClientsLimit, setTopClientsLimit] = useState<number>(50);
+  const [topClientsSort, setTopClientsSort] = useState<{ column: string; desc: boolean }>({
+    column: 'monto_comprado',
+    desc: true
+  });
 
   const handleYearChange = (newYear: string) => {
     const encodedCod = encodeURIComponent(data.codart);
@@ -246,6 +266,25 @@ export default function ProductDetailView({
         >
           <Building2 size={16} /> Stock por Almacén ({warehouseStock.length})
         </button>
+
+        <button
+          onClick={() => handleTabChange('movimientos')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.75rem 1.25rem',
+            backgroundColor: tab === 'movimientos' ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+            color: tab === 'movimientos' ? '#fff' : 'var(--text-secondary)',
+            border: 'none',
+            borderBottom: tab === 'movimientos' ? '2px solid var(--accent-primary)' : '2px solid transparent',
+            fontWeight: tab === 'movimientos' ? 600 : 500,
+            cursor: 'pointer',
+            fontSize: '0.9rem'
+          }}
+        >
+          <Activity size={16} /> Movimientos
+        </button>
       </div>
 
       {/* RENDER TAB 1: VISTA ANUAL / GENERAL */}
@@ -290,7 +329,7 @@ export default function ProductDetailView({
             />
             <KpiCard
               title="Unidades Vendidas"
-              value={data.cantidad_vendida.toLocaleString()}
+              value={data.cantidad_vendida.toLocaleString('en-US')}
               icon={<Package size={20} color="#60a5fa" />}
             />
             <KpiCard
@@ -314,6 +353,12 @@ export default function ProductDetailView({
               value={`${data.pct_monto_devo.toFixed(1)}%`}
               icon={<Percent size={20} color={data.pct_monto_devo > 5 ? '#f87171' : '#4ade80'} />}
               valueColor={data.pct_monto_devo > 5 ? '#f87171' : '#4ade80'}
+            />
+            <KpiCard
+              title="Días sin Inventario"
+              value={`${data.dias_sin_inventario} días`}
+              icon={<AlertTriangle size={20} color="#f43f5e" />}
+              valueColor={data.dias_sin_inventario > 0 ? '#f43f5e' : '#4ade80'}
             />
           </div>
 
@@ -402,87 +447,149 @@ export default function ProductDetailView({
                     <span>Devoluciones en Período</span>
                   </div>
                   <span style={{ fontWeight: 700, color: data.monto_devuelto > 0 ? '#f87171' : '#fff' }}>
-                    ${data.monto_devuelto.toLocaleString()} ({data.cantidad_devuelta} unid.)
+                    ${data.monto_devuelto.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({data.cantidad_devuelta.toLocaleString('en-US')} unid.)
                   </span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Top 50 Clientes Compradores */}
+          {/* Top Clientes Compradores */}
           <div className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Users size={20} color="var(--accent-primary)" /> Top 50 Clientes Compradores de este Producto
+                <Users size={20} color="var(--accent-primary)" /> Top Clientes Compradores de este Producto
               </h3>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Mostrando {data.top_clientes.length} clientes principales
-              </span>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Mostrar:</label>
+                  <select 
+                    value={topClientsLimit} 
+                    onChange={(e) => setTopClientsLimit(Number(e.target.value))}
+                    style={{ 
+                      backgroundColor: 'rgba(255,255,255,0.05)', 
+                      color: '#fff', 
+                      border: '1px solid rgba(255,255,255,0.1)', 
+                      borderRadius: '4px',
+                      padding: '0.25rem 0.5rem',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={500}>500</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-                <thead>
-                  <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                    <th style={{ padding: '1rem', width: '60px', textAlign: 'center' }}>#</th>
-                    <th style={{ padding: '1rem' }}>Código Cliente</th>
-                    <th style={{ padding: '1rem' }}>Nombre / Razón Social</th>
-                    <th style={{ padding: '1rem', textAlign: 'right' }}>Unidades Compradas</th>
-                    <th style={{ padding: '1rem', textAlign: 'right' }}>Monto Comprado ($)</th>
-                    <th style={{ padding: '1rem', textAlign: 'center' }}>Facturas / Compras</th>
-                    <th style={{ padding: '1rem', textAlign: 'center' }}>Acción</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.top_clientes.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-                        No hay registros de ventas a clientes para este producto en el período.
-                      </td>
-                    </tr>
-                  ) : (
-                    data.top_clientes.map((c, idx) => (
-                      <tr
-                        key={`${c.codcli}-${idx}`}
-                        style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}
-                      >
-                        <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[60px] text-center">#</TableHead>
+                    <TableHead>Código Cliente</TableHead>
+                    <TableHead>Nombre / Razón Social</TableHead>
+                    
+                    <TableHead 
+                      className="text-right cursor-pointer select-none"
+                      onClick={() => setTopClientsSort({ column: 'cantidad_comprada', desc: topClientsSort.column === 'cantidad_comprada' ? !topClientsSort.desc : true })}
+                    >
+                      Unidades Compradas {topClientsSort.column === 'cantidad_comprada' ? (topClientsSort.desc ? '↓' : '↑') : ''}
+                    </TableHead>
+                    
+                    <TableHead 
+                      className="text-right cursor-pointer select-none"
+                      onClick={() => setTopClientsSort({ column: 'monto_comprado', desc: topClientsSort.column === 'monto_comprado' ? !topClientsSort.desc : true })}
+                    >
+                      Monto Comprado ($) {topClientsSort.column === 'monto_comprado' ? (topClientsSort.desc ? '↓' : '↑') : ''}
+                    </TableHead>
+                    
+                    <TableHead 
+                      className="text-center cursor-pointer select-none"
+                      onClick={() => setTopClientsSort({ column: 'num_compras', desc: topClientsSort.column === 'num_compras' ? !topClientsSort.desc : true })}
+                    >
+                      Facturas / Compras {topClientsSort.column === 'num_compras' ? (topClientsSort.desc ? '↓' : '↑') : ''}
+                    </TableHead>
+                    
+                    <TableHead 
+                      className="text-center cursor-pointer select-none"
+                      onClick={() => setTopClientsSort({ column: 'ultima_compra', desc: topClientsSort.column === 'ultima_compra' ? !topClientsSort.desc : true })}
+                    >
+                      Última Compra {topClientsSort.column === 'ultima_compra' ? (topClientsSort.desc ? '↓' : '↑') : ''}
+                    </TableHead>
+                    
+                    <TableHead className="text-center">Acción</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(() => {
+                    const sortedData = [...data.top_clientes].sort((a, b) => {
+                      let valA: any = a[topClientsSort.column as keyof typeof a];
+                      let valB: any = b[topClientsSort.column as keyof typeof b];
+                      
+                      if (valA === valB) return 0;
+                      const modifier = topClientsSort.desc ? -1 : 1;
+                      return valA > valB ? modifier : -modifier;
+                    });
+                    
+                    const displayData = sortedData.slice(0, topClientsLimit);
+
+                    if (displayData.length === 0) {
+                      return (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center p-12 text-muted-foreground">
+                            No hay registros de ventas a clientes para este producto en el período.
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+                    
+                    return displayData.map((c, idx) => (
+                      <TableRow key={`${c.codcli}-${idx}`}>
+                        <TableCell className="text-center font-bold text-muted-foreground">
                           {idx + 1}
-                        </td>
-                        <td style={{ padding: '1rem', fontFamily: 'var(--font-geist-mono)', fontWeight: 600 }}>
-                          <Link href={`/clientes/${c.codcli}`} style={{ color: 'var(--accent-primary)', textDecoration: 'none' }}>
+                        </TableCell>
+                        <TableCell className="font-mono font-semibold">
+                          <Link href={`/clientes/${c.codcli}`} className="text-primary hover:underline">
                             {c.codcli}
                           </Link>
-                        </td>
-                        <td style={{ padding: '1rem', fontWeight: 500 }}>
-                          <Link href={`/clientes/${c.codcli}`} style={{ color: '#fff', textDecoration: 'none' }}>
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          <Link href={`/clientes/${c.codcli}`} className="hover:underline">
                             {c.nomcli}
                           </Link>
-                        </td>
-                        <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 600 }}>
-                          {c.cantidad_comprada.toLocaleString()}
-                        </td>
-                        <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: 'var(--accent-primary)' }}>
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">
+                          {c.cantidad_comprada.toLocaleString('en-US')}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-primary">
                           ${c.monto_comprado.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td style={{ padding: '1rem', textAlign: 'center' }}>
-                          <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.8rem' }}>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="bg-white/10 px-3 py-1 rounded-full text-xs">
                             {c.num_compras} compras
                           </span>
-                        </td>
-                        <td style={{ padding: '1rem', textAlign: 'center' }}>
+                        </TableCell>
+                        <TableCell className="text-center text-muted-foreground text-sm">
+                          {formatDateDisplay(c.ultima_compra)}
+                        </TableCell>
+                        <TableCell className="text-center">
                           <Link
                             href={`/clientes/${c.codcli}`}
-                            style={{ color: 'var(--accent-primary)', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}
+                            className="text-primary text-sm font-semibold hover:underline"
                           >
                             Ver Cliente →
                           </Link>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                        </TableCell>
+                      </TableRow>
+                    ));
+                  })()}
+                </TableBody>
+              </Table>
             </div>
           </div>
         </>
@@ -534,6 +641,11 @@ export default function ProductDetailView({
             ))}
           </div>
         </div>
+      )}
+
+      {/* RENDER TAB 4: MOVIMIENTOS (KARDEX) */}
+      {tab === 'movimientos' && kardexData && (
+        <ProductKardexView data={kardexData} />
       )}
     </div>
   );

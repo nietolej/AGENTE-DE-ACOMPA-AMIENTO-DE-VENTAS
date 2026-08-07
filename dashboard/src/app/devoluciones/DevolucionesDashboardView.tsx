@@ -6,10 +6,8 @@ import { useRouter } from 'next/navigation';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer
 } from 'recharts';
-import {
-  RotateCcw, DollarSign, Calendar, TrendingUp, Download, AlertTriangle,
-  Users, Package, UserCheck, ShieldAlert, CheckCircle2, Factory
-} from 'lucide-react';
+import { Download, AlertTriangle, Users, Building2, UserCheck, Package, RotateCcw, TrendingDown, TrendingUp } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   DevolucionesKPIs, ClienteDevolucionesSummary, VendedorDevolucionesSummary,
   ProductoDevolucionesSummary, DevolucionMensual
@@ -273,79 +271,72 @@ export default function DevolucionesDashboardView({
           </div>
 
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  <th style={{ padding: '1rem', width: '60px', textAlign: 'center' }}>#</th>
-                  <th style={{ padding: '1rem' }}>Código Cliente</th>
-                  <th style={{ padding: '1rem' }}>Nombre / Razón Social</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Venta Bruta ($)</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Monto Devuelto ($)</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Notas de Devolución</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Tasa Devolución %</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Nivel Riesgo</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[60px] text-center">#</TableHead>
+                  <TableHead>Código Cliente</TableHead>
+                  <TableHead>Nombre / Razón Social</TableHead>
+                  <TableHead className="text-right">Venta Bruta ($)</TableHead>
+                  <TableHead className="text-right">Monto Devuelto ($)</TableHead>
+                  <TableHead className="text-center">Notas de Devolución</TableHead>
+                  <TableHead className="text-right">Tasa Devolución %</TableHead>
+                  <TableHead className="text-center">Nivel Riesgo</TableHead>
+                  <TableHead className="text-center">Acción</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {clientes.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center p-12 text-muted-foreground">
                       No hay registros de devoluciones por clientes en el período.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   clientes.map((c, idx) => (
-                    <tr key={`${c.codcli}-${idx}`} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                      <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                    <TableRow key={`${c.codcli}-${idx}`}>
+                      <TableCell className="text-center font-bold text-muted-foreground">
                         {idx + 1}
-                      </td>
-                      <td style={{ padding: '1rem', fontFamily: 'var(--font-geist-mono)', fontWeight: 600 }}>
-                        <Link href={`/clientes/${c.codcli}`} style={{ color: 'var(--accent-primary)', textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="font-mono font-bold">
+                        <Link href={`/clientes/${c.codcli}`} className="text-primary hover:underline">
                           {c.codcli}
                         </Link>
-                      </td>
-                      <td style={{ padding: '1rem', fontWeight: 600 }}>
-                        <Link href={`/clientes/${c.codcli}`} style={{ color: '#fff', textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        <Link href={`/clientes/${c.codcli}`} className="text-foreground hover:underline">
                           {c.nomcli}
                         </Link>
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 600 }}>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
                         ${c.venta_monto.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: '#f87171' }}>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-red-400">
                         ${c.devolucion_monto.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.8rem' }}>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="bg-white/10 px-2 py-0.5 rounded-full text-xs">
                           {c.pedidos_afectados} notas
                         </span>
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: c.pct_devolucion > 8 ? '#f87171' : c.pct_devolucion > 3 ? '#fde047' : '#4ade80' }}>
+                      </TableCell>
+                      <TableCell className={`text-right font-bold ${c.pct_devolucion > 8 ? 'text-red-400' : c.pct_devolucion > 3 ? 'text-yellow-400' : 'text-green-400'}`}>
                         {c.pct_devolucion}%
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <span style={{
-                          padding: '0.25rem 0.6rem',
-                          borderRadius: '6px',
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          backgroundColor: c.nivel_riesgo === 'CRÍTICO' ? 'rgba(239, 68, 68, 0.2)' : c.nivel_riesgo === 'MODERADO' ? 'rgba(234, 179, 8, 0.2)' : 'rgba(34, 197, 94, 0.15)',
-                          color: c.nivel_riesgo === 'CRÍTICO' ? '#f87171' : c.nivel_riesgo === 'MODERADO' ? '#fde047' : '#4ade80'
-                        }}>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className={`px-2 py-1 rounded-md text-[10px] font-bold ${c.nivel_riesgo === 'CRÍTICO' ? 'bg-red-500/20 text-red-400' : c.nivel_riesgo === 'MODERADO' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-green-500/15 text-green-400'}`}>
                           {c.nivel_riesgo}
                         </span>
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <Link href={`/clientes/${c.codcli}`} style={{ color: 'var(--accent-primary)', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Link href={`/clientes/${c.codcli}`} className="text-primary text-xs font-semibold hover:underline">
                           Ver Cliente →
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}
@@ -360,64 +351,64 @@ export default function DevolucionesDashboardView({
           </div>
 
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  <th style={{ padding: '1rem', width: '60px', textAlign: 'center' }}>#</th>
-                  <th style={{ padding: '1rem' }}>Código Vendedor</th>
-                  <th style={{ padding: '1rem' }}>Asesor Comercial</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Venta Bruta ($)</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Devoluciones ($)</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Venta Neta ($)</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Tasa Devolución %</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[60px] text-center">#</TableHead>
+                  <TableHead>Código Vendedor</TableHead>
+                  <TableHead>Asesor Comercial</TableHead>
+                  <TableHead className="text-right">Venta Bruta ($)</TableHead>
+                  <TableHead className="text-right">Devoluciones ($)</TableHead>
+                  <TableHead className="text-right">Venta Neta ($)</TableHead>
+                  <TableHead className="text-right">Tasa Devolución %</TableHead>
+                  <TableHead className="text-center">Acción</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {vendedores.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center p-12 text-muted-foreground">
                       No hay registros de devoluciones por vendedores en el período.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   vendedores.map((v, idx) => (
-                    <tr key={`${v.codvend}-${idx}`} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                      <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                    <TableRow key={`${v.codvend}-${idx}`}>
+                      <TableCell className="text-center font-bold text-muted-foreground">
                         {idx + 1}
-                      </td>
-                      <td style={{ padding: '1rem', fontFamily: 'var(--font-geist-mono)', fontWeight: 600 }}>
-                        <Link href={`/vendedores/${v.codvend}`} style={{ color: 'var(--accent-primary)', textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="font-mono font-bold">
+                        <Link href={`/vendedores/${v.codvend}`} className="text-primary hover:underline">
                           {v.codvend}
                         </Link>
-                      </td>
-                      <td style={{ padding: '1rem', fontWeight: 600 }}>
-                        <Link href={`/vendedores/${v.codvend}`} style={{ color: '#fff', textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        <Link href={`/vendedores/${v.codvend}`} className="text-foreground hover:underline">
                           {v.nomvend}
                         </Link>
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 600 }}>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
                         ${v.venta_bruta.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: '#f87171' }}>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-red-400">
                         ${v.devolucion_monto.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: '#4ade80' }}>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-green-400">
                         ${v.venta_neta.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: v.pct_devolucion > 5 ? '#f87171' : 'var(--text-secondary)' }}>
+                      </TableCell>
+                      <TableCell className={`text-right font-bold ${v.pct_devolucion > 5 ? 'text-red-400' : 'text-muted-foreground'}`}>
                         {v.pct_devolucion}%
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <Link href={`/vendedores/${v.codvend}`} style={{ color: 'var(--accent-primary)', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Link href={`/vendedores/${v.codvend}`} className="text-primary text-xs font-semibold hover:underline">
                           Ver Vendedor →
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}
@@ -432,78 +423,78 @@ export default function DevolucionesDashboardView({
           </div>
 
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  <th style={{ padding: '1rem', width: '60px', textAlign: 'center' }}>#</th>
-                  <th style={{ padding: '1rem' }}>Código Artículo</th>
-                  <th style={{ padding: '1rem' }}>Descripción del Producto</th>
-                  <th style={{ padding: '1rem' }}>Grupo</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Unid. Vendidas</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Unid. Devueltas</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Monto Devuelto ($)</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Tasa Devolución %</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Alerta Calidad</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[60px] text-center">#</TableHead>
+                  <TableHead>Código Artículo</TableHead>
+                  <TableHead>Descripción del Producto</TableHead>
+                  <TableHead>Grupo</TableHead>
+                  <TableHead className="text-right">Unid. Vendidas</TableHead>
+                  <TableHead className="text-right">Unid. Devueltas</TableHead>
+                  <TableHead className="text-right">Monto Devuelto ($)</TableHead>
+                  <TableHead className="text-right">Tasa Devolución %</TableHead>
+                  <TableHead className="text-center">Alerta Calidad</TableHead>
+                  <TableHead className="text-center">Acción</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {productos.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center p-12 text-muted-foreground">
                       No hay registros de devoluciones por productos en el período.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   productos.map((p, idx) => (
-                    <tr key={`${p.codart}-${idx}`} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                      <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                    <TableRow key={`${p.codart}-${idx}`}>
+                      <TableCell className="text-center font-bold text-muted-foreground">
                         {idx + 1}
-                      </td>
-                      <td style={{ padding: '1rem', fontFamily: 'var(--font-geist-mono)', fontWeight: 600 }}>
-                        <Link href={`/productos/${encodeURIComponent(p.codart)}`} style={{ color: 'var(--accent-primary)', textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="font-mono font-bold">
+                        <Link href={`/productos/${encodeURIComponent(p.codart)}`} className="text-primary hover:underline">
                           {p.codart}
                         </Link>
-                      </td>
-                      <td style={{ padding: '1rem', fontWeight: 600 }}>
-                        <Link href={`/productos/${encodeURIComponent(p.codart)}`} style={{ color: '#fff', textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        <Link href={`/productos/${encodeURIComponent(p.codart)}`} className="text-foreground hover:underline">
                           {p.nomart}
                         </Link>
-                      </td>
-                      <td style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
                         {p.grupo}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 600 }}>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
                         {p.unidades_vendidas.toLocaleString()}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: '#f87171' }}>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-red-400">
                         {p.unidades_devueltas.toLocaleString()}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: '#f87171' }}>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-red-400">
                         ${p.monto_devuelto.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: p.pct_devolucion_volumen > 5 ? '#f87171' : 'var(--text-secondary)' }}>
+                      </TableCell>
+                      <TableCell className={`text-right font-bold ${p.pct_devolucion_volumen > 5 ? 'text-red-400' : 'text-muted-foreground'}`}>
                         {p.pct_devolucion_volumen}%
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
+                      </TableCell>
+                      <TableCell className="text-center">
                         {p.posible_defecto ? (
-                          <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                            <AlertTriangle size={12} /> ALERTA DE DEFECTO / ERROR
+                          <span className="bg-red-500/20 text-red-400 px-2 py-1 rounded-md text-[10px] font-bold inline-flex items-center gap-1">
+                            <AlertTriangle size={12} /> ALERTA DEFECTO
                           </span>
                         ) : (
-                          <span style={{ color: '#4ade80', fontSize: '0.8rem' }}>✓ Normal</span>
+                          <span className="text-green-400 text-xs">✓ Normal</span>
                         )}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <Link href={`/productos/${encodeURIComponent(p.codart)}`} style={{ color: 'var(--accent-primary)', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Link href={`/productos/${encodeURIComponent(p.codart)}`} className="text-primary text-xs font-semibold hover:underline">
                           Ver Producto →
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}

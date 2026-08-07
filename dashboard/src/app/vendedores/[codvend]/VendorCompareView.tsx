@@ -20,6 +20,17 @@ export default function VendorCompareView({ data, yearA, yearB }: Props) {
   };
 
   const renderDelta = (abs: number, pct: number, isCurrency: boolean = false, isNegativeGood: boolean = false) => {
+    if (isNaN(pct) || !isFinite(pct)) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600, marginTop: '0.35rem' }}>
+          <span>N/D</span>
+          <span style={{ color: 'var(--text-secondary)', fontWeight: 400, marginLeft: '0.25rem' }}>
+            (Sin histórico)
+          </span>
+        </div>
+      );
+    }
+
     const isPositive = pct > 0;
     const isGood = isNegativeGood ? !isPositive : isPositive;
     const color = isGood ? '#4ade80' : pct === 0 ? 'var(--text-secondary)' : '#f87171';

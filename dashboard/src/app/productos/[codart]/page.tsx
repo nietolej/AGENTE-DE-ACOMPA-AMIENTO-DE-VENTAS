@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation';
-import Navigation from '@/components/Navigation';
-import { getProductoDetail, getProductComparison, getProductWarehouseStock } from '@/lib/queries/articulos';
+import { getProductoDetail, getProductComparison, getProductWarehouseStock, getProductMovements, getProductKardex } from '@/lib/queries/articulos';
 import ProductDetailView from './ProductDetailView';
 
 interface PageProps {
@@ -31,10 +30,10 @@ export default async function ProductDetailPage({ params, searchParams }: PagePr
 
   const compareData = tab === 'compare' ? await getProductComparison(codart, yearA, yearB) : null;
   const warehouseStock = await getProductWarehouseStock(codart);
+  const kardexData = tab === 'movimientos' ? await getProductKardex(codart, year) : null;
 
   return (
     <div className="container" style={{ paddingTop: '1.5rem', paddingBottom: '3rem' }}>
-      <Navigation />
       <ProductDetailView
         data={productData}
         selectedYear={year}
@@ -43,6 +42,7 @@ export default async function ProductDetailPage({ params, searchParams }: PagePr
         yearB={yearB}
         compareData={compareData}
         warehouseStock={warehouseStock}
+        kardexData={kardexData}
       />
     </div>
   );

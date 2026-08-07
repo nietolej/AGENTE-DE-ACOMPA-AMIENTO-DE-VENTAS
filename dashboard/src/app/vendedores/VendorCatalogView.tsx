@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { UserCheck, Search, Filter, ArrowUpDown, Download, CheckCircle2, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { VendorListItem } from '@/lib/types';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface Props {
   vendedores: VendorListItem[];
@@ -231,137 +232,107 @@ export default function VendorCatalogView({
       {/* Tabla Ranking de Fuerza de Ventas */}
       <div className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-            <thead>
-              <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                <th style={{ padding: '1rem', width: '60px', textAlign: 'center' }}>#</th>
-                <th style={{ padding: '1rem' }}>Código</th>
-                <th style={{ padding: '1rem' }}>Asesor Comercial</th>
-                <th style={{ padding: '1rem' }}>Contacto / Teléfono</th>
-                <th style={{ padding: '1rem', textAlign: 'center' }}>Clientes</th>
-                <th style={{ padding: '1rem', textAlign: 'center' }}>Cobertura</th>
-                <th style={{ padding: '1rem', textAlign: 'center' }}>Conc. Top 3</th>
-                <th style={{ padding: '1rem', textAlign: 'center' }}>Facturas</th>
-                <th style={{ padding: '1rem', textAlign: 'right' }}>Venta Total ($)</th>
-                <th style={{ padding: '1rem', textAlign: 'right' }}>Devoluciones (%)</th>
-                <th style={{ padding: '1rem', textAlign: 'center' }}>Cumplimiento Meta</th>
-                <th style={{ padding: '1rem', textAlign: 'center' }}>Acción</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[60px] text-center">#</TableHead>
+                <TableHead>Código</TableHead>
+                <TableHead>Asesor Comercial</TableHead>
+                <TableHead>Contacto / Teléfono</TableHead>
+                <TableHead className="text-center">Clientes</TableHead>
+                <TableHead className="text-center">Cobertura</TableHead>
+                <TableHead className="text-center">Conc. Top 3</TableHead>
+                <TableHead className="text-center">Facturas</TableHead>
+                <TableHead className="text-right">Venta Total ($)</TableHead>
+                <TableHead className="text-right">Devoluciones (%)</TableHead>
+                <TableHead className="text-center">Cumplimiento Meta</TableHead>
+                <TableHead className="text-center">Acción</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {vendedores.length === 0 ? (
-                <tr>
-                  <td colSpan={10} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                <TableRow>
+                  <TableCell colSpan={12} className="text-center p-12 text-muted-foreground">
                     No se encontraron vendedores que coincidan con la búsqueda.
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ) : (
                 vendedores.map((v, idx) => {
                   const encodedCod = encodeURIComponent(v.codvend);
                   return (
-                    <tr
+                    <TableRow
                       key={`${v.codvend}-${idx}`}
                       style={{
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
                         opacity: v.is_administrative ? 0.7 : 1,
                         transition: 'background 0.15s ease'
                       }}
                     >
-                      <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                      <TableCell className="text-center font-bold text-muted-foreground">
                         {idx + 1}
-                      </td>
-                      <td style={{ padding: '1rem', fontFamily: 'var(--font-geist-mono)', fontWeight: 600 }}>
-                        <Link href={`/vendedores/${encodedCod}`} style={{ color: 'var(--accent-primary)', textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="font-mono font-semibold">
+                        <Link href={`/vendedores/${encodedCod}`} className="text-primary hover:underline">
                           {v.codvend}
                         </Link>
-                      </td>
-                      <td style={{ padding: '1rem', fontWeight: 600 }}>
-                        <Link href={`/vendedores/${encodedCod}`} style={{ color: '#fff', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        <Link href={`/vendedores/${encodedCod}`} className="flex items-center gap-2 hover:underline">
                           <span>{v.nomvend}</span>
                           {v.is_administrative && (
-                            <span style={{ fontSize: '0.7rem', backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#f87171', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
+                            <span className="text-[0.7rem] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded">
                               ADMINISTRATIVO
                             </span>
                           )}
                         </Link>
-                      </td>
-                      <td style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
                         {v.tlf1 || v.email || 'N/A'}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.8rem' }}>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="bg-white/5 px-2 py-0.5 rounded-full text-xs">
                           {v.clientes_atendidos} clientes
                         </span>
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <span style={{
-                          color: v.cobertura_cartera > 50 ? '#4ade80' : '#fde047',
-                          fontWeight: 600,
-                          fontSize: '0.85rem'
-                        }}>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className={v.cobertura_cartera > 50 ? 'text-green-400 font-semibold' : 'text-yellow-400 font-semibold'}>
                           {v.cobertura_cartera}%
                         </span>
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <span style={{
-                          color: v.concentracion_top3 > 60 ? '#f87171' : 'var(--text-secondary)',
-                          fontWeight: v.concentracion_top3 > 60 ? 700 : 400,
-                          fontSize: '0.85rem'
-                        }}>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className={v.concentracion_top3 > 60 ? 'text-red-400 font-bold' : 'text-muted-foreground'}>
                           {v.concentracion_top3}%
                         </span>
-                      </td>
-
-                      <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 600 }}>
+                      </TableCell>
+                      <TableCell className="text-center font-semibold">
                         {v.cant_facturas}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: 'var(--accent-primary)' }}>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-primary">
                         ${v.venta_total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right' }}>
-                        <span style={{
-                          color: v.pct_devoluciones > 5 ? '#f87171' : 'var(--text-secondary)',
-                          fontWeight: v.pct_devoluciones > 5 ? 700 : 400
-                        }}>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className={v.pct_devoluciones > 5 ? 'text-red-400 font-bold' : 'text-muted-foreground'}>
                           {v.pct_devoluciones.toFixed(1)}% (${v.devoluciones_monto.toLocaleString()})
                         </span>
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <span style={{
-                          padding: '0.25rem 0.6rem',
-                          borderRadius: '6px',
-                          fontSize: '0.8rem',
-                          fontWeight: 700,
-                          backgroundColor: v.pct_cumplimiento >= 100 ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                          color: v.pct_cumplimiento >= 100 ? '#4ade80' : '#fde047',
-                          border: v.pct_cumplimiento >= 100 ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(234, 179, 8, 0.3)'
-                        }}>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className={`px-2 py-1 rounded text-xs font-bold border ${v.pct_cumplimiento >= 100 ? 'bg-green-500/15 text-green-400 border-green-500/30' : 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30'}`}>
                           {v.pct_cumplimiento.toFixed(1)}%
                         </span>
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
+                      </TableCell>
+                      <TableCell className="text-center">
                         <Link
                           href={`/vendedores/${encodedCod}`}
-                          style={{
-                            display: 'inline-block',
-                            backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                            color: '#fff',
-                            padding: '0.35rem 0.75rem',
-                            borderRadius: '6px',
-                            fontSize: '0.8rem',
-                            fontWeight: 600,
-                            textDecoration: 'none'
-                          }}
+                          className="inline-block bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition-colors"
                         >
                           Ver Ficha →
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </div>
     </div>

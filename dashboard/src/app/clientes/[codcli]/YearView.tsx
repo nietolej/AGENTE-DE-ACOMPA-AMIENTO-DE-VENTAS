@@ -62,11 +62,11 @@ export default function YearView({ data }: { data: CustomerKPIs }) {
       )}
 
       {/* BLOQUE 1: KPIs Principales (18 Indicadores) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem' }}>
         
         {/* Grupo 1: Finanzas y Metas */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-           <h3 style={{ borderBottom: '1px solid #333', paddingBottom: '0.5rem', margin: 0, color: 'var(--text-secondary)' }}>Finanzas y Metas</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+           <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.4rem', margin: '0 0 0.2rem 0', color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Finanzas y Metas</h3>
            <KpiCard 
              title="Venta Total ($)" 
              value={`$${(data.venta_total || 0).toLocaleString('en-US', {maximumFractionDigits:2})}`}
@@ -91,33 +91,49 @@ export default function YearView({ data }: { data: CustomerKPIs }) {
         </div>
 
         {/* Grupo 2: Volumen y Operaciones */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-           <h3 style={{ borderBottom: '1px solid #333', paddingBottom: '0.5rem', margin: 0, color: 'var(--text-secondary)' }}>Volumen y Operaciones</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+           <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.4rem', margin: '0 0 0.2rem 0', color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Volumen y Operaciones</h3>
            <KpiCard 
              title="Pedidos de Compra" 
              value={data.pedidos_compra || 0}
              icon={<Package size={20} color="#00C49F" />}
            />
-           <KpiCard 
-             title="Pedido Promedio ($)" 
-             value={`$${(data.pedido_promedio || 0).toLocaleString('en-US', {maximumFractionDigits:2})}`}
-             icon={<ShoppingCart size={20} color="#00C49F" />}
-           />
+           <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', padding: '0.75rem 0.9rem', flex: 1 }}>
+             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.35rem' }}>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                 <ShoppingCart size={18} color="#00C49F" />
+                 <h3 style={{ fontSize: '0.9rem', margin: 0, fontWeight: 500 }} className="text-sub">Pedido Promedio ($)</h3>
+               </div>
+               <span style={{ fontWeight: 'bold', fontSize: '1.05rem', color: '#60a5fa' }}>
+                 ${(data.pedido_promedio || 0).toLocaleString('en-US', {maximumFractionDigits:2})}
+               </span>
+             </div>
+             
+             <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem' }}>
+               <div style={{ flex: 1, backgroundColor: 'rgba(0, 196, 159, 0.08)', border: '1px solid rgba(0, 196, 159, 0.2)', padding: '0.3rem 0.45rem', borderRadius: '6px' }}>
+                 <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>Alm. 01 (Bqto)</div>
+                 <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#00C49F' }}>
+                   ${(data.pedido_promedio_bqto || 0).toLocaleString('en-US', {maximumFractionDigits:2})}
+                 </div>
+               </div>
+               <div style={{ flex: 1, backgroundColor: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', padding: '0.3rem 0.45rem', borderRadius: '6px' }}>
+                 <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>Alm. 06 (Ccs)</div>
+                 <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#3b82f6' }}>
+                   ${(data.pedido_promedio_ccs || 0).toLocaleString('en-US', {maximumFractionDigits:2})}
+                 </div>
+               </div>
+             </div>
+           </div>
            <KpiCard 
              title="Venta por Cantidad Ítems" 
              value={(data.venta_items || 0).toLocaleString('en-US')}
              icon={<Package size={20} color="#00C49F" />}
            />
-           <KpiCard 
-             title="Descuento Ponderado" 
-             value={`${(data.descuento_ponderado || 0).toFixed(2)}%`}
-             icon={<Percent size={20} color="#00C49F" />}
-           />
         </div>
 
         {/* Grupo 3: Calidad (Devoluciones) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-           <h3 style={{ borderBottom: '1px solid #333', paddingBottom: '0.5rem', margin: 0, color: 'var(--text-secondary)' }}>Devoluciones</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+           <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.4rem', margin: '0 0 0.2rem 0', color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Devoluciones</h3>
            <KpiCard 
              title="Devoluciones ($)" 
              value={`$${(data.devoluciones_monto || 0).toLocaleString('en-US', {maximumFractionDigits:2})}`}
@@ -139,9 +155,9 @@ export default function YearView({ data }: { data: CustomerKPIs }) {
            />
         </div>
 
-        {/* Grupo 4: Condiciones Comerciales e Histórico */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-           <h3 style={{ borderBottom: '1px solid #333', paddingBottom: '0.5rem', margin: 0, color: 'var(--text-secondary)' }}>Cobranzas y CxC</h3>
+        {/* Grupo 4: Cobranzas, CxC y Descuentos */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+           <h3 style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '0.4rem', margin: '0 0 0.2rem 0', color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cobranzas y CxC</h3>
            <KpiCard 
              title="Días de Pago Promedio" 
              value={`${(data.dias_pago_promedio || 0).toFixed(1)} d`}
@@ -153,6 +169,49 @@ export default function YearView({ data }: { data: CustomerKPIs }) {
              icon={<CreditCard size={20} color="#FFBB28" />}
              valueColor={(data.deuda_actual || 0) > 0 ? 'var(--accent-danger)' : 'inherit'}
            />
+           
+           {/* Card Consolidado Compacto de Descuentos Ponderados */}
+           <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.75rem 0.9rem', flex: 1 }}>
+             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.35rem' }}>
+               <Percent size={17} color="#FFBB28" />
+               <h3 style={{ fontSize: '0.9rem', margin: 0, fontWeight: 500 }} className="text-sub">Descuentos Ponderados</h3>
+             </div>
+             
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.1rem' }}>
+               {/* Descuento Facturación */}
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: '0.35rem 0.55rem', borderRadius: '6px' }}>
+                 <div>
+                   <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)' }}>Descuento Facturación</div>
+                   <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>${(data.descuento_factura_monto ?? data.descuento_monto ?? 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} otorgados</div>
+                 </div>
+                 <span style={{ fontWeight: 'bold', fontSize: '1.05rem', color: '#00C49F' }}>
+                   {(data.descuento_factura_ponderado ?? data.descuento_ponderado ?? 0).toFixed(2)}%
+                 </span>
+               </div>
+
+               {/* Descuento Pronto Pago */}
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: '0.35rem 0.55rem', borderRadius: '6px' }}>
+                 <div>
+                   <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)' }}>Descuento Pronto Pago</div>
+                   <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>${(data.descuento_pp_monto ?? 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} otorgados</div>
+                 </div>
+                 <span style={{ fontWeight: 'bold', fontSize: '1.05rem', color: '#3b82f6' }}>
+                   {(data.descuento_pp_ponderado ?? 0).toFixed(2)}%
+                 </span>
+               </div>
+
+               {/* Descuento Total */}
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '0.35rem 0.55rem', borderRadius: '6px' }}>
+                 <div>
+                   <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#f59e0b' }}>Descuento Total Ponderado</div>
+                   <div style={{ fontSize: '0.68rem', color: '#cbd5e1' }}>${(data.descuento_total_monto ?? 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} otorgados</div>
+                 </div>
+                 <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#f59e0b' }}>
+                   {(data.descuento_total_ponderado ?? 0).toFixed(2)}%
+                 </span>
+               </div>
+             </div>
+           </div>
            {data.vencimiento_cxc && (
              <KpiCard 
                title="Vencimiento CxC" 
@@ -209,18 +268,32 @@ export default function YearView({ data }: { data: CustomerKPIs }) {
                     data={data.mix_pagos}
                     cx="50%"
                     cy="50%"
-                    innerRadius={80}
-                    outerRadius={120}
+                    innerRadius={70}
+                    outerRadius={105}
                     paddingAngle={5}
                     dataKey="monto"
                     nameKey="moneda"
-                    label={({ name, percent }: { name?: string; percent?: number }) => `${name || ''} (${((percent || 0) * 100).toFixed(1)}%)`}
+                    label={({ name, value, percent }: { name?: string; value?: number; percent?: number }) => 
+                      `${name || ''}: $${(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${((percent || 0) * 100).toFixed(1)}%)`
+                    }
                   >
                     {data.mix_pagos.map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <RechartsTooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333' }} />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={36} 
+                    formatter={(value: any, entry: any) => {
+                      const item = entry.payload;
+                      const val = item?.monto ?? item?.value ?? item?.payload?.monto ?? item?.payload?.value ?? 0;
+                      return `${value}: $${Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                    }}
+                  />
+                  <RechartsTooltip 
+                    formatter={(value: any) => [`$${Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Monto ($)']}
+                    contentStyle={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)' }} 
+                  />
                 </PieChart>
               </ResponsiveContainer>
             ) : (

@@ -2,7 +2,8 @@ import { parseTxtFile } from './parser';
 import { getInactiveClientsSet } from './clientes';
 import {
   ProductListItem, ProductDetail, ProductMonthlySales, ProductTopClient,
-  ProductGroupSummary, ProductWarehouseStock, ProductCompareData, ProductComparePeriod
+  ProductGroupSummary, ProductWarehouseStock, ProductCompareData, ProductComparePeriod,
+  ProductMovementsResponse, ProductMovementData, ProductKardexRow
 } from '../types';
 
 
@@ -12,6 +13,12 @@ function matchesYear(emisionDateStr: string | null | undefined, yearParam: numbe
   const emisionYear = emisionDateStr.substring(0, 4);
   const selectedYears = yearParam.toString().split(',').map(y => y.trim());
   return selectedYears.includes(emisionYear);
+}
+
+function isFacturaValida(f: any): boolean {
+  if (!f) return false;
+  const anulada = String(f.anulada).toLowerCase();
+  return anulada !== 'true' && anulada !== 't' && anulada !== '1';
 }
 
 export async function getTopItems(year: number | string, limit: number, orderBy: 'cantidad' | 'monto', codcli?: string, incluirInactivos: boolean = false) {
@@ -31,6 +38,7 @@ export async function getTopItems(year: number | string, limit: number, orderBy:
     for (const f of facturas_enc) {
       if (f.tipo === 'NC') continue; 
       if (!f.numfac || !f.numfac.toUpperCase().startsWith('D')) continue;
+      if (!isFacturaValida(f)) continue;
       if (!matchesYear(f.emision, year)) continue;
       if (!incluirInactivos && inactivos.has(f.cliente)) continue;
       if (codcli && f.cliente !== codcli) continue;
@@ -38,15 +46,50 @@ export async function getTopItems(year: number | string, limit: number, orderBy:
       validNumfac.set(f.numfac, f.emision);
     }
 
+    const inventario = await parseTxtFile('inventario.txt');
+    const stockMap = new Map<string, { codart: string, stock: number }>();
+    const stockDescMap = new Map<string, number>();
+
+    for (const p of inventario) {
+      const codart = (p.codart || p.item || '').trim().toUpperCase();
+      const nomart = (p.nomart || p.descrip || '').trim().toUpperCase();
+      const stk01 = parseFloat(p.stk01 || '0');
+      const stk06 = parseFloat(p.stk06 || '0');
+      const stock = (isNaN(stk01) ? 0 : stk01) + (isNaN(stk06) ? 0 : stk06);
+      if (codart) stockMap.set(codart, { codart, stock });
+      if (nomart) stockDescMap.set(nomart, stock);
+    }
+
     // Agregar renglones de venta
-    const itemMap = new Map<string, { descrip: string, cantidad: number, monto: number, devoluciones_cantidad: number, devoluciones_monto: number, ultima_venta: string }>();
+    const itemMap = new Map<string, { codart?: string, descrip: string, cantidad: number, monto: number, devoluciones_cantidad: number, devoluciones_monto: number, ultima_venta: string, stock_disponible: number }>();
     
     for (const r of facturas_ren) {
       const emision = validNumfac.get(r.numfac);
       if (emision) {
         const id = r.codart || r.item || r.descrip || 'Sin Nombre';
+        const codUpper = (r.codart || r.item || '').trim().toUpperCase();
+        const descUpper = (r.descrip || '').trim().toUpperCase();
+
         if (!itemMap.has(id)) {
-          itemMap.set(id, { descrip: r.descrip || id, cantidad: 0, monto: 0, devoluciones_cantidad: 0, devoluciones_monto: 0, ultima_venta: '00000000' });
+          let stock = 0;
+          let realCodart = r.codart || r.item || '';
+          if (codUpper && stockMap.has(codUpper)) {
+            stock = stockMap.get(codUpper)!.stock;
+            realCodart = stockMap.get(codUpper)!.codart;
+          } else if (descUpper && stockDescMap.has(descUpper)) {
+            stock = stockDescMap.get(descUpper)!;
+          }
+
+          itemMap.set(id, {
+            codart: realCodart,
+            descrip: r.descrip || id,
+            cantidad: 0,
+            monto: 0,
+            devoluciones_cantidad: 0,
+            devoluciones_monto: 0,
+            ultima_venta: '00000000',
+            stock_disponible: stock
+          });
         }
         const data = itemMap.get(id)!;
         data.cantidad += parseFloat(r.cantidad || '0');
@@ -150,6 +193,7 @@ export async function getProductosList(
     for (const f of facturas_enc) {
       if (f.tipo === 'NC') continue;
       if (!f.numfac || !f.numfac.toUpperCase().startsWith('D')) continue;
+      if (!isFacturaValida(f)) continue;
       if (!matchesYear(f.emision, year)) continue;
       if (inactivos.has(f.cliente)) continue;
       validFacturas.set(f.numfac, f.emision);
@@ -256,6 +300,7 @@ export async function getProductoDetail(
   try {
     const codartTarget = decodeURIComponent(codartParam).trim().toUpperCase();
     const inventario = await parseTxtFile('inventario.txt');
+    const movimientos = await parseTxtFile('movimientos.txt');
     const facturas_enc = await parseTxtFile('facturas_enc.txt');
     const facturas_ren = await parseTxtFile('facturas_ren.txt');
     const devoluciones_enc = await parseTxtFile('devoluciones_enc.txt');
@@ -287,8 +332,9 @@ export async function getProductoDetail(
     const precio_d = parseFloat(pMaster?.precio_d || '0');
 
     const stk01 = parseFloat(pMaster?.stk01 || '0');
+    const stk03 = parseFloat(pMaster?.stk03 || '0');
     const stk06 = parseFloat(pMaster?.stk06 || '0');
-    const stock_actual = (isNaN(stk01) ? 0 : stk01) + (isNaN(stk06) ? 0 : stk06);
+    const stock_actual = (isNaN(stk01) ? 0 : stk01) + (isNaN(stk03) ? 0 : stk03) + (isNaN(stk06) ? 0 : stk06);
     const stock_disponible = stock_actual; // Almacenes de venta
 
     // Mercancía en tránsito y producción
@@ -313,6 +359,7 @@ export async function getProductoDetail(
     for (const f of facturas_enc) {
       if (f.tipo === 'NC') continue;
       if (!f.numfac || !f.numfac.toUpperCase().startsWith('D')) continue;
+      if (!isFacturaValida(f)) continue;
       if (!matchesYear(f.emision, year)) continue;
       if (inactivos.has(f.cliente)) continue;
       validFacturas.set(f.numfac, { emision: f.emision, cliente: f.cliente });
@@ -323,7 +370,7 @@ export async function getProductoDetail(
     let monto_vendido = 0;
     const facturasSet = new Set<string>();
     const monthlyMap = new Map<string, { cantidad: number, monto: number, devoluciones_monto: number }>();
-    const clientSalesMap = new Map<string, { cantidad: number, monto: number, comprasSet: Set<string> }>();
+    const clientSalesMap = new Map<string, { cantidad: number, monto: number, comprasSet: Set<string>, ultima_compra: string }>();
     let ultima_venta = '00000000';
 
     for (const r of facturas_ren) {
@@ -358,12 +405,15 @@ export async function getProductoDetail(
       // Desglose por cliente
       if (fInfo.cliente) {
         if (!clientSalesMap.has(fInfo.cliente)) {
-          clientSalesMap.set(fInfo.cliente, { cantidad: 0, monto: 0, comprasSet: new Set() });
+          clientSalesMap.set(fInfo.cliente, { cantidad: 0, monto: 0, comprasSet: new Set(), ultima_compra: '00000000' });
         }
         const cData = clientSalesMap.get(fInfo.cliente)!;
         cData.cantidad += qty;
         cData.monto += amt;
         cData.comprasSet.add(r.numfac);
+        if (fInfo.emision > cData.ultima_compra) {
+          cData.ultima_compra = fInfo.emision;
+        }
       }
     }
 
@@ -411,10 +461,107 @@ export async function getProductoDetail(
 
     // Métricas de Rotación (Velocidad Diaria, Días y Meses de Inventario)
     // Usar ventana de 365 días (o días transcurridos si es año actual)
-    const diasVentana = year === 'todos' ? 730 : 365;
+    let diasVentana = 365;
+    if (year === 'todos') {
+      diasVentana = 730;
+    } else {
+      const today = new Date();
+      if (parseInt(year.toString()) === today.getFullYear()) {
+        const start = new Date(today.getFullYear(), 0, 1);
+        diasVentana = Math.max(1, Math.ceil((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+      }
+    }
     const velocidad_diaria = cantidad_vendida / diasVentana;
     const dias_inventario = velocidad_diaria > 0 ? stock_actual / velocidad_diaria : 999;
     const meses_inventario = velocidad_diaria > 0 ? stock_actual / (velocidad_diaria * 30) : 99;
+
+    // Cálculo de Días sin Inventario
+    let stock_diario = 0;
+    // Encontrar AP (Apertura)
+    const movs_ap = movimientos.filter((m: any) => (m.codmovart || '').trim().toUpperCase() === codartTarget && (m.numdoc || '').toUpperCase().startsWith('AP'));
+    for (const ap of movs_ap) {
+      const tipinv = (ap.tipinv || '').toUpperCase();
+      if (tipinv === 'EN') {
+        stock_diario += parseFloat(ap.cantidad || '0');
+      } else if (tipinv === 'SA') {
+        stock_diario -= parseFloat(ap.cantidad || '0');
+      }
+    }
+
+    // Filtrar movimientos del año (que no sean AP)
+    const movs_year = movimientos.filter((m: any) => 
+      (m.codmovart || '').trim().toUpperCase() === codartTarget &&
+      !(m.numdoc || '').toUpperCase().startsWith('AP') &&
+      (year === 'todos' || matchesYear(m.fecha_mov, year))
+    );
+
+    // Agrupar por día
+    const movs_por_dia = new Map<string, number>();
+    for (const m of movs_year) {
+      const fecha = m.fecha_mov;
+      if (!fecha || fecha.length < 8) continue;
+      const cant = parseFloat(m.cantidad || '0');
+      const tipinv = (m.tipinv || '').toUpperCase();
+      const delta = tipinv === 'EN' ? cant : (tipinv === 'SA' ? -cant : 0);
+      movs_por_dia.set(fecha, (movs_por_dia.get(fecha) || 0) + delta);
+    }
+
+    let dias_sin_inventario = 0;
+    let startStr = '';
+    let endStr = '';
+
+    if (year === 'todos') {
+      let minDate = '99999999';
+      let maxDate = '00000000';
+      for (const m of movs_year) {
+        if (m.fecha_mov && m.fecha_mov < minDate) minDate = m.fecha_mov;
+        if (m.fecha_mov && m.fecha_mov > maxDate) maxDate = m.fecha_mov;
+      }
+      if (minDate !== '99999999') {
+        startStr = minDate;
+        endStr = maxDate;
+      }
+    } else {
+      startStr = `${year}0101`;
+      endStr = `${year}1231`;
+      const today = new Date();
+      const currentYear = today.getFullYear().toString();
+      if (year.toString() === currentYear) {
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        endStr = `${currentYear}${mm}${dd}`;
+      }
+    }
+
+    if (startStr && endStr) {
+      let currentDate = new Date(
+        parseInt(startStr.substring(0, 4)),
+        parseInt(startStr.substring(4, 6)) - 1,
+        parseInt(startStr.substring(6, 8))
+      );
+      const endDate = new Date(
+        parseInt(endStr.substring(0, 4)),
+        parseInt(endStr.substring(4, 6)) - 1,
+        parseInt(endStr.substring(6, 8))
+      );
+
+      while (currentDate <= endDate) {
+        const yyyy = currentDate.getFullYear().toString();
+        const mm = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(currentDate.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}${mm}${dd}`;
+
+        if (movs_por_dia.has(dateStr)) {
+          stock_diario += movs_por_dia.get(dateStr)!;
+        }
+
+        // Permitir un margen pequeño para problemas de precisión decimal
+        if (stock_diario <= 0.001) {
+          dias_sin_inventario++;
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    }
 
     // Formatear serie mensual en orden cronológico
     const ventas_mensuales: ProductMonthlySales[] = Array.from(monthlyMap.entries())
@@ -426,7 +573,7 @@ export async function getProductoDetail(
       }))
       .sort((a, b) => a.mes.localeCompare(b.mes));
 
-    // Formatear Top 50 Clientes
+    // Formatear Top Clientes (se enviarán todos y el frontend los paginará/ordenará)
     const top_clientes: ProductTopClient[] = Array.from(clientSalesMap.entries())
       .map(([codcli, data]) => ({
         codcli,
@@ -434,9 +581,9 @@ export async function getProductoDetail(
         cantidad_comprada: Math.round(data.cantidad * 100) / 100,
         monto_comprado: Math.round(data.monto * 100) / 100,
         num_compras: data.comprasSet.size,
+        ultima_compra: data.ultima_compra,
       }))
-      .sort((a, b) => b.monto_comprado - a.monto_comprado)
-      .slice(0, 50);
+      .sort((a, b) => b.monto_comprado - a.monto_comprado);
 
     const formattedUltimaVenta = ultima_venta.length === 8
       ? `${ultima_venta.substring(0, 4)}-${ultima_venta.substring(4, 6)}-${ultima_venta.substring(6, 8)}`
@@ -463,6 +610,7 @@ export async function getProductoDetail(
       stock_disponible,
       velocidad_diaria: Math.round(velocidad_diaria * 1000) / 1000,
       dias_inventario: Math.round(dias_inventario * 10) / 10,
+      dias_sin_inventario,
       meses_inventario: Math.round(meses_inventario * 10) / 10,
       pendiente_transito,
       pendiente_produccion,
@@ -627,6 +775,7 @@ export async function getProductWarehouseStock(
     );
 
     const stk01 = parseFloat(pMaster?.stk01 || '0');
+    const stk03 = parseFloat(pMaster?.stk03 || '0');
     const stk06 = parseFloat(pMaster?.stk06 || '0');
 
     // Mapear almacenes
@@ -635,6 +784,12 @@ export async function getProductWarehouseStock(
         almacen: '01',
         nomalm: almacenes.find(a => a.almacen === '01')?.nomalm || 'ALMACÉN PRINCIPAL / BARQUISIMETO',
         stock: isNaN(stk01) ? 0 : stk01,
+        es_vendible: true,
+      },
+      {
+        almacen: '03',
+        nomalm: almacenes.find(a => a.almacen === '03')?.nomalm || 'ALMACÉN 3',
+        stock: isNaN(stk03) ? 0 : stk03,
         es_vendible: true,
       },
       {
@@ -652,4 +807,146 @@ export async function getProductWarehouseStock(
   }
 }
 
+/**
+ * Obtener movimientos de un producto por año, categorizado por tipo de documento
+ */
+export async function getProductMovements(
+  codartParam: string,
+  year: string = '2024'
+): Promise<ProductMovementsResponse> {
+  try {
+    const codartTarget = decodeURIComponent(codartParam).trim().toUpperCase();
+    const movimientos = await parseTxtFile('movimientos.txt');
+    
+    let apertura_total = 0;
+    
+    // Map to group by mes and almacen
+    const map = new Map<string, ProductMovementData>();
 
+    for (const mov of movimientos) {
+      if (!mov.codmovart) continue;
+      const movCodart = mov.codmovart.trim().toUpperCase();
+      if (movCodart !== codartTarget) continue;
+      
+      const fecha = mov.fecha_mov || ''; // YYYYMMDD
+      if (!matchesYear(fecha, year) && year !== 'todos') continue;
+
+      const mesStr = fecha.length >= 6 ? `${fecha.substring(0, 4)}-${fecha.substring(4, 6)}` : 'N/A';
+      const almacen = (mov.almacen || '01').trim();
+      const numdoc = (mov.numdoc || '').trim().toUpperCase();
+      const cantidad = parseFloat(mov.cantidad || '0');
+
+      if (isNaN(cantidad)) continue;
+
+      let tipo = 'OTRO';
+      if (numdoc.startsWith('AP')) {
+        tipo = 'AP';
+        apertura_total += cantidad;
+      } else if (/^[0-9]/.test(numdoc)) {
+        tipo = 'Recepcion';
+      } else if (numdoc.startsWith('AJU')) {
+        tipo = 'AJU';
+      } else if (numdoc.startsWith('D')) {
+        tipo = 'D';
+      } else if (numdoc.startsWith('TR')) {
+        tipo = 'TR';
+      } else if (numdoc.startsWith('NC')) {
+        tipo = 'NC';
+      }
+
+      const key = `${mesStr}_${almacen}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          mes: mesStr,
+          almacen: almacen,
+          AP: 0,
+          Recepcion: 0,
+          AJU: 0,
+          D: 0,
+          TR: 0,
+          NC: 0
+        });
+      }
+
+      const data = map.get(key)!;
+      const absCantidad = Math.abs(cantidad);
+
+      if (tipo === 'AP') data.AP += absCantidad;
+      else if (tipo === 'Recepcion') data.Recepcion += absCantidad;
+      else if (tipo === 'AJU') data.AJU += absCantidad;
+      else if (tipo === 'D') data.D += absCantidad;
+      else if (tipo === 'TR') data.TR += absCantidad;
+      else if (tipo === 'NC') data.NC += absCantidad;
+    }
+
+    const result = Array.from(map.values()).sort((a, b) => a.mes.localeCompare(b.mes));
+
+    return {
+      apertura_total,
+      movimientos: result
+    };
+  } catch (error) {
+    console.error("Error obteniendo movimientos del producto", error);
+    return {
+      apertura_total: 0,
+      movimientos: []
+    };
+  }
+}
+
+
+
+
+export async function getProductKardex(
+  codartParam: string,
+  year: number | string = 'todos'
+): Promise<ProductKardexRow[]> {
+  try {
+    const codartTarget = decodeURIComponent(codartParam).trim().toUpperCase();
+    const movimientos = await parseTxtFile('movimientos.txt');
+    
+    // Filtrar movimientos por producto y año
+    const kardexRows: Omit<ProductKardexRow, 'saldo_progresivo'>[] = [];
+    
+    for (const m of movimientos) {
+      const codart = (m.codmovart || m.item || '').trim().toUpperCase();
+      if (codart !== codartTarget) continue;
+      if (!matchesYear(m.fecha_mov, year)) continue;
+      
+      const tipo = (m.tipinv || '').toUpperCase();
+      let cant = parseFloat(m.cantidad || '0');
+      
+      if (tipo === 'SA' || tipo === 'ST') {
+        cant = -cant;
+      }
+      
+      kardexRows.push({
+        fecha: m.fecha_mov,
+        documento: m.numdoc || 'N/A',
+        tipo: tipo,
+        almacen: m.almacen || 'N/A',
+        cantidad: cant
+      });
+    }
+    
+    // Ordenar cronológicamente
+    kardexRows.sort((a, b) => a.fecha.localeCompare(b.fecha));
+    
+    // Calcular saldo progresivo
+    let saldo = 0;
+    const result: ProductKardexRow[] = [];
+    
+    for (const row of kardexRows) {
+      saldo += row.cantidad;
+      result.push({
+        ...row,
+        saldo_progresivo: saldo
+      });
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("Error obteniendo kardex del producto", error);
+    return [];
+  }
+}

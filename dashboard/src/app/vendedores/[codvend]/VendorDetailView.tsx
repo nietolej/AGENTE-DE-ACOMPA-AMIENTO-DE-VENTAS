@@ -14,6 +14,7 @@ import {
 import { VendorDetail, VendorCompareData } from '@/lib/types';
 import { KpiCard } from '@/components/ui/KpiCard';
 import VendorCompareView from './VendorCompareView';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface Props {
   data: VendorDetail;
@@ -470,69 +471,62 @@ export default function VendorDetailView({
             </div>
 
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-                <thead>
-                  <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                    <th style={{ padding: '1rem', width: '60px', textAlign: 'center' }}>#</th>
-                    <th style={{ padding: '1rem' }}>Código Cliente</th>
-                    <th style={{ padding: '1rem' }}>Nombre / Razón Social</th>
-                    <th style={{ padding: '1rem', textAlign: 'right' }}>Venta Histórica ($)</th>
-                    <th style={{ padding: '1rem', textAlign: 'center' }}>Última Compra</th>
-                    <th style={{ padding: '1rem', textAlign: 'center' }}>Días Sin Comprar</th>
-                    <th style={{ padding: '1rem', textAlign: 'center' }}>Acción</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[60px] text-center">#</TableHead>
+                    <TableHead>Código Cliente</TableHead>
+                    <TableHead>Nombre / Razón Social</TableHead>
+                    <TableHead className="text-right">Venta Histórica ($)</TableHead>
+                    <TableHead className="text-center">Última Compra</TableHead>
+                    <TableHead className="text-center">Días Sin Comprar</TableHead>
+                    <TableHead className="text-center">Acción</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {data.clientes_dormidos.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', padding: '3rem', color: '#4ade80' }}>
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center p-12 text-green-400">
                         ¡Excelente! No hay clientes dormidos en la cartera asignada a este vendedor.
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     data.clientes_dormidos.map((c, idx) => (
-                      <tr key={`${c.codcli}-${idx}`} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                        <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                      <TableRow key={`${c.codcli}-${idx}`}>
+                        <TableCell className="text-center font-bold text-muted-foreground">
                           {idx + 1}
-                        </td>
-                        <td style={{ padding: '1rem', fontFamily: 'var(--font-geist-mono)', fontWeight: 600 }}>
-                          <Link href={`/clientes/${c.codcli}`} style={{ color: 'var(--accent-primary)', textDecoration: 'none' }}>
+                        </TableCell>
+                        <TableCell className="font-mono font-semibold">
+                          <Link href={`/clientes/${c.codcli}`} className="text-primary hover:underline">
                             {c.codcli}
                           </Link>
-                        </td>
-                        <td style={{ padding: '1rem', fontWeight: 500 }}>
-                          <Link href={`/clientes/${c.codcli}`} style={{ color: '#fff', textDecoration: 'none' }}>
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          <Link href={`/clientes/${c.codcli}`} className="text-white hover:underline">
                             {c.nomcli}
                           </Link>
-                        </td>
-                        <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: 'var(--accent-primary)' }}>
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-primary">
                           ${c.monto_historico.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                        </TableCell>
+                        <TableCell className="text-center text-muted-foreground">
                           {c.ultima_compra}
-                        </td>
-                        <td style={{ padding: '1rem', textAlign: 'center' }}>
-                          <span style={{
-                            padding: '0.25rem 0.6rem',
-                            borderRadius: '12px',
-                            fontSize: '0.8rem',
-                            fontWeight: 700,
-                            backgroundColor: c.dias_sin_comprar > 90 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(234, 179, 8, 0.2)',
-                            color: c.dias_sin_comprar > 90 ? '#f87171' : '#fde047'
-                          }}>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${c.dias_sin_comprar > 90 ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
                             {c.dias_sin_comprar >= 999 ? '> 1 año' : `${c.dias_sin_comprar} días`}
                           </span>
-                        </td>
-                        <td style={{ padding: '1rem', textAlign: 'center' }}>
-                          <Link href={`/clientes/${c.codcli}`} style={{ color: 'var(--accent-primary)', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Link href={`/clientes/${c.codcli}`} className="text-primary text-sm font-semibold hover:underline">
                             Ver Cliente →
                           </Link>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))
                   )}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </div>
         </>
@@ -553,58 +547,58 @@ export default function VendorDetailView({
           </div>
 
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  <th style={{ padding: '1rem', width: '60px', textAlign: 'center' }}>#</th>
-                  <th style={{ padding: '1rem' }}>Código Cliente</th>
-                  <th style={{ padding: '1rem' }}>Nombre / Razón Social</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Facturas / Compras</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Monto Vendido ($)</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[60px] text-center">#</TableHead>
+                  <TableHead>Código Cliente</TableHead>
+                  <TableHead>Nombre / Razón Social</TableHead>
+                  <TableHead className="text-center">Facturas / Compras</TableHead>
+                  <TableHead className="text-right">Monto Vendido ($)</TableHead>
+                  <TableHead className="text-center">Acción</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.top_clientes.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center p-12 text-muted-foreground">
                       No hay clientes asignados/atendidos en el período.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   data.top_clientes.map((c, idx) => (
-                    <tr key={`${c.codcli}-${idx}`} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                      <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                    <TableRow key={`${c.codcli}-${idx}`}>
+                      <TableCell className="text-center font-bold text-muted-foreground">
                         {idx + 1}
-                      </td>
-                      <td style={{ padding: '1rem', fontFamily: 'var(--font-geist-mono)', fontWeight: 600 }}>
-                        <Link href={`/clientes/${c.codcli}`} style={{ color: 'var(--accent-primary)', textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="font-mono font-semibold">
+                        <Link href={`/clientes/${c.codcli}`} className="text-primary hover:underline">
                           {c.codcli}
                         </Link>
-                      </td>
-                      <td style={{ padding: '1rem', fontWeight: 600 }}>
-                        <Link href={`/clientes/${c.codcli}`} style={{ color: '#fff', textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        <Link href={`/clientes/${c.codcli}`} className="text-white hover:underline">
                           {c.nomcli}
                         </Link>
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.8rem' }}>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="bg-white/10 px-2 py-1 rounded-full text-xs">
                           {c.cant_facturas} facturas
                         </span>
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: 'var(--accent-primary)' }}>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-primary">
                         ${c.monto_comprado.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <Link href={`/clientes/${c.codcli}`} style={{ color: 'var(--accent-primary)', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Link href={`/clientes/${c.codcli}`} className="text-primary text-sm font-semibold hover:underline">
                           Ver Cliente →
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}
@@ -619,56 +613,56 @@ export default function VendorDetailView({
           </div>
 
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  <th style={{ padding: '1rem', width: '60px', textAlign: 'center' }}>#</th>
-                  <th style={{ padding: '1rem' }}>Código Artículo</th>
-                  <th style={{ padding: '1rem' }}>Descripción del Producto</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Unidades Vendidas</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Monto Vendido ($)</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[60px] text-center">#</TableHead>
+                  <TableHead>Código Artículo</TableHead>
+                  <TableHead>Descripción del Producto</TableHead>
+                  <TableHead className="text-right">Unidades Vendidas</TableHead>
+                  <TableHead className="text-right">Monto Vendido ($)</TableHead>
+                  <TableHead className="text-center">Acción</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.top_productos.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center p-12 text-muted-foreground">
                       No hay productos vendidos en el período.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   data.top_productos.map((p, idx) => (
-                    <tr key={`${p.codart}-${idx}`} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                      <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                    <TableRow key={`${p.codart}-${idx}`}>
+                      <TableCell className="text-center font-bold text-muted-foreground">
                         {idx + 1}
-                      </td>
-                      <td style={{ padding: '1rem', fontFamily: 'var(--font-geist-mono)', fontWeight: 600 }}>
-                        <Link href={`/productos/${encodeURIComponent(p.codart)}`} style={{ color: 'var(--accent-primary)', textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="font-mono font-semibold">
+                        <Link href={`/productos/${encodeURIComponent(p.codart)}`} className="text-primary hover:underline">
                           {p.codart}
                         </Link>
-                      </td>
-                      <td style={{ padding: '1rem', fontWeight: 600 }}>
-                        <Link href={`/productos/${encodeURIComponent(p.codart)}`} style={{ color: '#fff', textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        <Link href={`/productos/${encodeURIComponent(p.codart)}`} className="text-white hover:underline">
                           {p.nomart}
                         </Link>
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 600 }}>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
                         {p.cantidad_vendida.toLocaleString()}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: 'var(--accent-primary)' }}>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-primary">
                         ${p.monto_vendido.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <Link href={`/productos/${encodeURIComponent(p.codart)}`} style={{ color: 'var(--accent-primary)', fontSize: '0.8rem', fontWeight: 600, textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Link href={`/productos/${encodeURIComponent(p.codart)}`} className="text-primary text-sm font-semibold hover:underline">
                           Ver Producto →
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}

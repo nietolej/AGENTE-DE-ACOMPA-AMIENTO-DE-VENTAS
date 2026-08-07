@@ -13,6 +13,12 @@ function matchesYear(emisionDateStr: string | null | undefined, yearParam: numbe
   return selectedYears.includes(emisionYear);
 }
 
+function isFacturaValida(f: any): boolean {
+  if (!f) return false;
+  const anulada = String(f.anulada).toLowerCase();
+  return anulada !== 'true' && anulada !== 't' && anulada !== '1';
+}
+
 const ADMIN_CODES = new Set(['00', 'C1', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'D0', 'D1', 'D2', '12']);
 
 export async function getDevolucionesOverview(
@@ -71,6 +77,7 @@ export async function getDevolucionesOverview(
     for (const f of facturas_enc) {
       if (f.tipo === 'NC') continue;
       if (!f.numfac || !f.numfac.toUpperCase().startsWith('D')) continue;
+      if (!isFacturaValida(f)) continue;
       if (!matchesYear(f.emision, year)) continue;
       if (inactivos.has(f.cliente)) continue;
 
@@ -129,6 +136,7 @@ export async function getDevolucionesOverview(
 
     for (const d of devoluciones_enc) {
       if (!matchesYear(d.emision, year)) continue;
+      if (!isFacturaValida(d)) continue;
       if (inactivos.has(d.cliente)) continue;
 
       const amt = parseFloat(d.tot_devo || '0');
@@ -167,7 +175,7 @@ export async function getDevolucionesOverview(
       if (!validDevosSet.has(dr.numdevo)) continue;
       const codart = (dr.codart || dr.item || '').trim().toUpperCase();
       const qty = parseFloat(dr.cantidad || '0');
-      const amt = parseFloat(dr.tot_ren || '0');
+      const amt = parseFloat(dr.importe || dr.precio || '0');
       total_unidades_devueltas += qty;
 
       if (codart) {

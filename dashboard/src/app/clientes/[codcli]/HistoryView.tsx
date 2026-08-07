@@ -6,6 +6,8 @@ import {
   PieChart, Pie, Cell
 } from 'recharts';
 import { ShoppingCart, DollarSign, AlertCircle, CreditCard } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatDateDisplay } from '@/lib/types';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#a288fe'];
 
@@ -29,6 +31,33 @@ export default function HistoryView({ data }: { data: any }) {
   };
 
   const currentConfig = metricConfig[selectedMetric];
+
+  // Generar datos para el gráfico agregando la barra de tendencia anualizada para el año en curso
+  const rawResumen = data.resumen_anios || [];
+  const currentYearStr = new Date().getFullYear().toString();
+  const currentYearItem = rawResumen.find((r: any) => r.anio?.toString() === currentYearStr);
+
+  const chartData = [...rawResumen];
+  if (currentYearItem) {
+    const today = new Date();
+    const startOfYear = new Date(today.getFullYear(), 0, 1);
+    const diasTranscurridos = Math.max(1, Math.ceil((today.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24)));
+    const factorTendencia = 365 / diasTranscurridos;
+
+    chartData.push({
+      ...currentYearItem,
+      anio: `${currentYearStr} (Tendencia)`,
+      isTendencia: true,
+      venta_total: (currentYearItem.venta_total || 0) * factorTendencia,
+      venta_items: Math.round((currentYearItem.venta_items || 0) * factorTendencia),
+      pedidos: Math.round((currentYearItem.pedidos || 0) * factorTendencia),
+      devoluciones_monto: (currentYearItem.devoluciones_monto || 0) * factorTendencia,
+      devoluciones_items: Math.round((currentYearItem.devoluciones_items || 0) * factorTendencia),
+      devoluciones_pedidos: Math.round((currentYearItem.devoluciones_pedidos || 0) * factorTendencia),
+      dias_pago: currentYearItem.dias_pago || 0,
+      descuento: currentYearItem.descuento || 0
+    });
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -148,16 +177,23 @@ export default function HistoryView({ data }: { data: any }) {
           </div>
           <div style={{ width: '100%', height: '85%', marginTop: '1.5rem' }}>
             <ResponsiveContainer>
-              <BarChart data={data.resumen_anios} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                 <XAxis dataKey="anio" stroke="#888" />
                 <YAxis stroke="#888" />
                 <RechartsTooltip 
                   contentStyle={{ backgroundColor: '#111', borderColor: '#333' }}
-                  formatter={(value: number) => currentConfig.format ? currentConfig.format(value) : value}
+                  formatter={(value: any) => currentConfig.format ? currentConfig.format(Number(value || 0)) : (value ?? 0)}
                 />
                 <Legend />
-                <Bar dataKey={selectedMetric} fill={currentConfig.color} name={currentConfig.label} radius={[4, 4, 0, 0]} />
+                <Bar dataKey={selectedMetric} name={currentConfig.label} radius={[4, 4, 0, 0]}>
+                  {chartData.map((entry: any, index: number) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.isTendencia ? '#FFBB28' : currentConfig.color} 
+                    />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -173,18 +209,32 @@ export default function HistoryView({ data }: { data: any }) {
                   data={th.mix_pagos}
                   cx="50%"
                   cy="50%"
-                  innerRadius={80}
-                  outerRadius={120}
+                  innerRadius={70}
+                  outerRadius={105}
                   paddingAngle={5}
                   dataKey="monto"
                   nameKey="moneda"
-                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(1)}%)`}
+                  label={({ name, value, percent }: { name?: string; value?: number; percent?: number }) => 
+                    `${name || ''}: $${(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${((percent || 0) * 100).toFixed(1)}%)`
+                  }
                 >
                   {th.mix_pagos.map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <RechartsTooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333' }} />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={36} 
+                  formatter={(value: any, entry: any) => {
+                    const item = entry.payload;
+                    const val = item?.monto ?? item?.value ?? item?.payload?.monto ?? item?.payload?.value ?? 0;
+                    return `${value}: $${Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                  }}
+                />
+                <RechartsTooltip 
+                  formatter={(value: any) => [`$${Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Monto ($)']}
+                  contentStyle={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)' }} 
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -199,40 +249,40 @@ export default function HistoryView({ data }: { data: any }) {
         </div>
         
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '0.95rem' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}>
-                <th style={{ padding: '1rem' }}>Año</th>
-                <th style={{ padding: '1rem' }}>Ventas ($)</th>
-                <th style={{ padding: '1rem' }}>Ítems</th>
-                <th style={{ padding: '1rem' }}>Pedidos</th>
-                <th style={{ padding: '1rem' }}>T. Promedio</th>
-                <th style={{ padding: '1rem' }}>Dev. ($)</th>
-                <th style={{ padding: '1rem' }}>Índice Dev ($)</th>
-                <th style={{ padding: '1rem' }}>Días Pago</th>
-                <th style={{ padding: '1rem' }}>Dcto (%)</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Año</TableHead>
+                <TableHead>Ventas ($)</TableHead>
+                <TableHead>Ítems</TableHead>
+                <TableHead>Pedidos</TableHead>
+                <TableHead>T. Promedio</TableHead>
+                <TableHead>Dev. ($)</TableHead>
+                <TableHead>Índice Dev ($)</TableHead>
+                <TableHead>Días Pago</TableHead>
+                <TableHead>Dcto (%)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {data.resumen_anios.map((row: any, idx: number) => {
                 const tkProm = row.pedidos > 0 ? (row.venta_total / row.pedidos) : 0;
                 const iDevMonto = (row.devoluciones_monto / row.venta_total) * 100;
                 return (
-                  <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '1rem', fontWeight: 'bold', color: 'var(--accent-primary)' }}>{row.anio}</td>
-                    <td style={{ padding: '1rem', fontWeight: 'bold' }}>${row.venta_total.toLocaleString('en-US')}</td>
-                    <td style={{ padding: '1rem' }}>{row.venta_items.toLocaleString('en-US')}</td>
-                    <td style={{ padding: '1rem' }}>{row.pedidos}</td>
-                    <td style={{ padding: '1rem' }}>${tkProm.toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
-                    <td style={{ padding: '1rem', color: 'var(--accent-danger)' }}>${row.devoluciones_monto.toLocaleString('en-US')}</td>
-                    <td style={{ padding: '1rem' }}>{iDevMonto.toFixed(1)}%</td>
-                    <td style={{ padding: '1rem' }}>{row.dias_pago.toFixed(1)}</td>
-                    <td style={{ padding: '1rem' }}>{row.descuento.toFixed(1)}%</td>
-                  </tr>
+                  <TableRow key={idx}>
+                    <TableCell className="font-bold text-primary">{row.anio}</TableCell>
+                    <TableCell className="font-bold">${row.venta_total.toLocaleString('en-US')}</TableCell>
+                    <TableCell>{row.venta_items.toLocaleString('en-US')}</TableCell>
+                    <TableCell>{row.pedidos}</TableCell>
+                    <TableCell>${tkProm.toLocaleString('en-US', {maximumFractionDigits: 2})}</TableCell>
+                    <TableCell className="text-red-400 font-bold">${row.devoluciones_monto.toLocaleString('en-US')}</TableCell>
+                    <TableCell>{iDevMonto.toFixed(1)}%</TableCell>
+                    <TableCell>{row.dias_pago.toFixed(1)}</TableCell>
+                    <TableCell>{row.descuento.toFixed(1)}%</TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </div>
 
@@ -243,41 +293,43 @@ export default function HistoryView({ data }: { data: any }) {
         
         {th.estado_cuenta.length > 0 ? (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '0.95rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}>
-                  <th style={{ padding: '1rem' }}>Nro Nota/Factura</th>
-                  <th style={{ padding: '1rem' }}>Monto Deuda ($)</th>
-                  <th style={{ padding: '1rem' }}>Monto Abono ($)</th>
-                  <th style={{ padding: '1rem' }}>Saldo Pendiente ($)</th>
-                  <th style={{ padding: '1rem' }}>Fecha Vencimiento</th>
-                  <th style={{ padding: '1rem' }}>Estado (Mora)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {th.estado_cuenta.map((factura: any, idx: number) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '1rem', fontWeight: 'bold' }}>{factura.nota}</td>
-                    <td style={{ padding: '1rem' }}>${factura.deuda_original.toLocaleString('en-US')}</td>
-                    <td style={{ padding: '1rem', color: 'var(--accent-success)' }}>${factura.abonado.toLocaleString('en-US')}</td>
-                    <td style={{ padding: '1rem', color: 'var(--accent-danger)' }}>${factura.saldo.toLocaleString('en-US')}</td>
-                    <td style={{ padding: '1rem' }}>{factura.vencimiento}</td>
-                    <td style={{ padding: '1rem' }}>
-                      <span style={{ 
-                        padding: '0.3rem 0.6rem', 
-                        borderRadius: '4px', 
-                        backgroundColor: factura.mora > 0 ? 'rgba(255, 68, 68, 0.2)' : 'rgba(0, 200, 150, 0.2)',
-                        color: factura.mora > 0 ? 'var(--accent-danger)' : 'var(--accent-success)',
-                        fontWeight: 'bold',
-                        fontSize: '0.85rem'
-                      }}>
-                        {factura.mora > 0 ? `${factura.mora} días mora` : 'Al día'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nro Nota/Factura</TableHead>
+                  <TableHead>Fecha Emisión</TableHead>
+                  <TableHead>Monto Deuda ($)</TableHead>
+                  <TableHead>Monto Abono ($)</TableHead>
+                  <TableHead>Saldo Pendiente ($)</TableHead>
+                  <TableHead>Fecha Vencimiento</TableHead>
+                  <TableHead>Estado (Mora)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {th.estado_cuenta.map((factura: any, idx: number) => {
+                  const moraDays = factura.mora || 0;
+                  return (
+                    <TableRow key={idx}>
+                      <TableCell className="font-bold">{factura.nota}</TableCell>
+                      <TableCell>{formatDateDisplay(factura.emision)}</TableCell>
+                      <TableCell>${factura.deuda_original.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-green-400 font-semibold">${factura.abonado.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-red-400 font-bold">${factura.saldo.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                      <TableCell>{formatDateDisplay(factura.vencimiento)}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded-md text-[13px] font-bold ${moraDays > 0 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
+                          {moraDays > 0 
+                            ? `${moraDays} ${moraDays === 1 ? 'día' : 'días'} de vencido` 
+                            : moraDays < 0 
+                              ? `${Math.abs(moraDays)} ${Math.abs(moraDays) === 1 ? 'día' : 'días'} por vencer` 
+                              : 'Al día'}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>

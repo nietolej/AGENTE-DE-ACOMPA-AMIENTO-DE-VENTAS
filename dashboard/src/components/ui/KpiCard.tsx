@@ -1,8 +1,11 @@
 import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface KpiCardProps {
   title: string;
   value: string | number;
+  subValue?: string | number;
   icon?: React.ReactNode;
   trend?: {
     value: number | string;
@@ -12,34 +15,43 @@ interface KpiCardProps {
   valueColor?: string;
 }
 
-export function KpiCard({ title, value, icon, trend, valueColor }: KpiCardProps) {
+export function KpiCard({ title, value, subValue, icon, trend, valueColor }: KpiCardProps) {
   return (
-    <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, minWidth: '200px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>
-        {icon && <span>{icon}</span>}
-        <h3 style={{ fontSize: '1rem', margin: 0, fontWeight: 500 }} className="text-sub">{title}</h3>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '0.5rem' }}>
-        <span style={{ fontWeight: 'bold', fontSize: '1.5rem', color: valueColor || 'inherit' }}>
-          {value}
-        </span>
-        {trend && (
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.25rem', 
-            color: trend.isPositive ? 'var(--accent-success)' : 'var(--accent-danger)', 
-            fontWeight: 'bold',
-            fontSize: '0.85rem',
-            backgroundColor: trend.isPositive ? 'rgba(0, 200, 150, 0.1)' : 'rgba(255, 68, 68, 0.1)',
-            padding: '0.2rem 0.4rem',
-            borderRadius: '4px'
-          }}>
-            <span>{trend.value}</span>
-            {trend.label && <span style={{ opacity: 0.8, fontWeight: 'normal' }}>{trend.label}</span>}
+    <Card className="flex min-w-[180px] flex-col overflow-hidden bg-card/70 backdrop-blur-md shadow-sm border-border/50 hover:shadow-md hover:border-primary/40 transition-all duration-300">
+      <CardHeader className="flex flex-row items-center gap-2 p-3 pb-1 space-y-0">
+        {icon && <div className="text-primary/80 scale-90">{icon}</div>}
+        <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 pt-1 pb-3">
+        <div className="flex items-end justify-between">
+          <div className="flex flex-col">
+            <span 
+              className="text-lg font-semibold tracking-tight"
+              style={{ color: valueColor || 'inherit' }}
+            >
+              {value}
+            </span>
+            {subValue && (
+              <p className="text-xs text-muted-foreground mt-1 font-medium">
+                {subValue}
+              </p>
+            )}
           </div>
-        )}
-      </div>
-    </div>
+          {trend && (
+            <div className={cn(
+              "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[0.65rem] font-bold ml-2",
+              trend.isPositive 
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" 
+                : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+            )}>
+              <span>{trend.value}</span>
+              {trend.label && <span className="opacity-80 font-normal ml-0.5">{trend.label}</span>}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

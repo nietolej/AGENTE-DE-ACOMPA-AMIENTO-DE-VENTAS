@@ -1,6 +1,6 @@
 import { formatDateDisplay } from '@/lib/types';
 import Link from 'next/link';
-import { getClientInfo, getClientOverviewYear, getClientHistorical, getClientComparison } from '../../../lib/queries/clientes';
+import { getClientInfo, getClientOverviewYear, getClientHistorical, getClientComparison, getClientStatement } from '../../../lib/queries/clientes';
 import { getTopItems } from '../../../lib/queries/articulos';
 import YearView from './YearView';
 import HistoryView from './HistoryView';
@@ -8,6 +8,7 @@ import CompareView from './CompareView';
 import ClientSearch from './ClientSearch';
 import YearSelector from './YearSelector';
 import TopItems from '../TopItems';
+import StatementView from './StatementView';
 
 // Fuerzo render dinámico porque usamos searchParams
 export const dynamic = 'force-dynamic';
@@ -71,6 +72,9 @@ export default async function ClientePage({
       incluirInactivos
     );
     content = <CompareView data={dataComp} />;
+  } else if (tab === 'estadocuenta') {
+    const dataStatement = await getClientStatement(realCodcli, year);
+    content = <StatementView data={dataStatement} />;
   }
 
   return (
@@ -138,10 +142,23 @@ export default async function ClientePage({
         >
           Comparación de Periodos
         </Link>
+        <Link 
+          href={`/clientes/${codcli}?tab=estadocuenta`}
+          style={{ 
+            textDecoration: 'none', 
+            padding: '0.5rem 1rem', 
+            borderRadius: '4px',
+            fontWeight: 'bold',
+            backgroundColor: tab === 'estadocuenta' ? 'var(--accent-primary)' : 'transparent',
+            color: tab === 'estadocuenta' ? 'white' : 'var(--text-secondary)'
+          }}
+        >
+          Estado de Cuenta (Detalle)
+        </Link>
       </div>
 
-      {/* Control de Año (Solo para tab año) */}
-      {tab === 'anio' && (
+      {/* Control de Año (Solo para tab año y estadocuenta) */}
+      {(tab === 'anio' || tab === 'estadocuenta') && (
         <YearSelector currentYear={year} availableYears={availableYears} codcli={codcli} />
       )}
 

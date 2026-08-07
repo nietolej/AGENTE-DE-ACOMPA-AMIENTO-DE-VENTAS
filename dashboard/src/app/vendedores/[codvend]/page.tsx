@@ -1,5 +1,4 @@
 import { notFound } from 'next/navigation';
-import Navigation from '@/components/Navigation';
 import { getVendedorDetail, getVendedorComparison } from '@/lib/queries/vendedores';
 import VendorDetailView from './VendorDetailView';
 
@@ -33,7 +32,6 @@ export default async function VendorDetailPage({ params, searchParams }: PagePro
 
   return (
     <div className="container" style={{ paddingTop: '1.5rem', paddingBottom: '3rem' }}>
-      <Navigation />
       <VendorDetailView
         data={vendorData}
         selectedYear={year}

@@ -16,6 +16,7 @@ export interface FacturaEstadoCuenta {
   deuda_original: number;
   abonado: number;
   saldo: number;
+  emision?: string;
   vencimiento: string;
   mora?: number;
 }
@@ -38,6 +39,8 @@ export interface CustomerKPIs {
   venta_items: number;
   pedidos_compra: number;
   pedido_promedio: number;
+  pedido_promedio_bqto?: number;
+  pedido_promedio_ccs?: number;
   meta_venta: number;
   devoluciones_monto: number;
   devoluciones_items: number;
@@ -46,6 +49,13 @@ export interface CustomerKPIs {
   indice_dev_items: number;
   indice_dev_pedidos: number;
   descuento_ponderado: number;
+  descuento_monto?: number;
+  descuento_factura_ponderado?: number;
+  descuento_factura_monto?: number;
+  descuento_pp_ponderado?: number;
+  descuento_pp_monto?: number;
+  descuento_total_ponderado?: number;
+  descuento_total_monto?: number;
   dias_pago_promedio: number;
   ultima_compra: string | null;
   deuda_actual: number;
@@ -64,6 +74,7 @@ export interface PeriodData {
   devoluciones_pedidos: number;
   dias_pago: number;
   descuento_ponderado: number;
+  descuento_monto?: number;
   mix_pagos: MixPago[];
 }
 
@@ -116,6 +127,7 @@ export interface ProductTopClient {
   cantidad_comprada: number;
   monto_comprado: number;
   num_compras: number;
+  ultima_compra: string;
 }
 
 export interface ProductMonthlySales {
@@ -154,6 +166,7 @@ export interface ProductDetail {
   stock_disponible: number;
   velocidad_diaria: number; // unidades/día
   dias_inventario: number;
+  dias_sin_inventario: number; // NUEVO: Días con stock en 0 durante el período
   meses_inventario: number;
   pendiente_transito: number;
   pendiente_produccion: number;
@@ -179,6 +192,22 @@ export interface ProductWarehouseStock {
   nomalm: string;
   stock: number;
   es_vendible: boolean;
+}
+
+export interface ProductMovementData {
+  mes: string;
+  almacen: string;
+  AP: number;
+  Recepcion: number;
+  AJU: number;
+  D: number;
+  TR: number;
+  NC: number;
+}
+
+export interface ProductMovementsResponse {
+  apertura_total: number;
+  movimientos: ProductMovementData[];
 }
 
 export interface ProductComparePeriod {
@@ -319,8 +348,10 @@ export interface CobranzaKPIs {
   total_facturado_periodo: number;
   efectividad_cobro_pct: number;
   dias_pago_promedio: number;
+  dias_pago_mediana: number;
+  pagos_a_tiempo_pct: number;
+  transacciones_cobro: number;
   monto_en_mora: number;
-  comisiones_totales: number;
 }
 
 export interface AgingBucket {
@@ -330,15 +361,49 @@ export interface AgingBucket {
   pct: number;
 }
 
-export interface VendorCommissionItem {
+export interface PaymentVelocityBucket {
+  tramo: string;
+  monto: number;
+  count: number;
+  pct: number;
+}
+
+export interface MonthlyPaymentTrend {
+  mes: string; // YYYY-MM
+  monto_cobrado: number;
+  dias_promedio_cobro: number;
+  transacciones: number;
+}
+
+export interface VendorPaymentPerformanceItem {
   codvend: string;
   nomvend: string;
   monto_cobrado: number;
-  comision_ganada: number;
-  tasa_efectiva: number;
+  transacciones: number;
   dias_promedio_cobro: number;
+  dias_mediana_cobro: number;
   cobranza_a_tiempo_pct: number;
+  mora_30plus_pct: number;
+  deuda_pendiente_cartera: number;
   is_administrative: boolean;
+  descuento_monto?: number;
+  descuento_ponderado_pct?: number;
+}
+
+export interface ClientPaymentPerformanceItem {
+  codcli: string;
+  nomcli: string;
+  codvend: string;
+  nomvend: string;
+  monto_cobrado: number;
+  transacciones: number;
+  dias_promedio_cobro: number;
+  dias_mediana_cobro: number;
+  cobranza_a_tiempo_pct: number;
+  deuda_pendiente: number;
+  categoria_pago: 'PUNTUAL' | 'RETRASO_LEVE' | 'RETRASO_CRITICO' | 'SIN_COBROS';
+  descuento_monto?: number;
+  descuento_ponderado_pct?: number;
 }
 
 export interface BankPaymentSummary {
@@ -440,9 +505,26 @@ export interface InventoryGroupHealth {
   venta_perdida_grupo: number;
 }
 
+export interface InventoryValuationData {
+  mes: string;
+  monto: number;
+}
 
+export interface ProductKardexRow {
+  fecha: string;
+  documento: string;
+  tipo: string;
+  almacen: string;
+  cantidad: number;
+  saldo_progresivo: number;
+}
 
-
-
-
-
+export interface ClientStatementRow {
+  fecha: string;
+  documento: string;
+  tipo: string; // FC, NC, CA, AB
+  concepto: string;
+  cargo: number;
+  abono: number;
+  saldo_progresivo: number;
+}

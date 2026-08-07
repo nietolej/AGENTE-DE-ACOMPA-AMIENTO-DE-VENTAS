@@ -2,14 +2,17 @@
 
 import React, { useState } from 'react';
 import { formatDateDisplay } from '@/lib/types';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type Item = { 
+  codart?: string,
   descrip: string, 
   cantidad: number, 
   monto: number,
   devoluciones_cantidad: number,
   devoluciones_monto: number,
-  ultima_venta: string
+  ultima_venta: string,
+  stock_disponible?: number
 };
 
 interface TopItemsProps {
@@ -97,54 +100,65 @@ export default function TopItems({ topByCantidad, topByMonto, isGlobal }: TopIte
       </div>
 
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}>
-              <th style={{ padding: '1rem', width: '50%' }}>Descripción del Producto</th>
-              <th style={{ padding: '1rem', textAlign: 'right' }}>Última Venta</th>
-              <th style={{ padding: '1rem', textAlign: 'right' }}>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[40%]">Descripción del Producto</TableHead>
+              <TableHead className="text-right">Última Venta</TableHead>
+              <TableHead className="text-right">
                 Devoluciones <br/>
-                <span style={{ fontSize: '0.8rem', color: 'var(--error)' }}>
+                <span className="text-[10px] text-red-400">
                   {orderBy === 'cantidad' ? '(Unds)' : '($)'}
                 </span>
-              </th>
-              <th style={{ padding: '1rem', textAlign: 'right' }}>Cantidad Vendida</th>
-              <th style={{ padding: '1rem', textAlign: 'right' }}>Monto Total ($)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item, i) => (
-              <tr key={i} style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                <td style={{ padding: '1rem' }}>
-                  <span style={{ color: 'var(--text-secondary)', marginRight: '1rem' }}>#{i+1}</span>
-                  {item.descrip}
-                </td>
-                <td style={{ padding: '1rem', textAlign: 'right', color: 'var(--text-secondary)' }}>
-                  {formatDateDisplay(item.ultima_venta)}
-                </td>
-                <td style={{ padding: '1rem', textAlign: 'right', color: 'var(--error)' }}>
-                  {orderBy === 'cantidad' 
-                    ? item.devoluciones_cantidad.toLocaleString('en-US') 
-                    : `$${item.devoluciones_monto.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
-                  }
-                </td>
-                <td style={{ padding: '1rem', textAlign: 'right' }}>
-                  {item.cantidad.toLocaleString('en-US')}
-                </td>
-                <td style={{ padding: '1rem', textAlign: 'right', color: 'var(--accent-secondary)' }}>
-                  ${item.monto.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </td>
-              </tr>
-            ))}
+              </TableHead>
+              <TableHead className="text-right">Stock Dispon.</TableHead>
+              <TableHead className="text-right">Cantidad Vendida</TableHead>
+              <TableHead className="text-right">Monto Total ($)</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((item, i) => {
+              const stock = item.stock_disponible ?? 0;
+              const stockClass = stock > 20 ? 'bg-green-500/15 text-green-400 border border-green-500/30' : stock > 0 ? 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/30' : 'bg-red-500/15 text-red-400 border border-red-500/30';
+
+              return (
+                <TableRow key={i}>
+                  <TableCell>
+                    <span className="text-muted-foreground mr-4 font-bold">#{i+1}</span>
+                    <span className="font-semibold">{item.descrip}</span>
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground text-sm">
+                    {formatDateDisplay(item.ultima_venta)}
+                  </TableCell>
+                  <TableCell className="text-right font-bold text-red-400">
+                    {orderBy === 'cantidad' 
+                      ? item.devoluciones_cantidad.toLocaleString('en-US') 
+                      : `$${item.devoluciones_monto.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                    }
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className={`px-2 py-1 rounded-md text-xs font-bold ${stockClass}`}>
+                      {stock > 0 ? `${stock.toLocaleString('en-US')} unds.` : 'Agotado'}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right font-semibold">
+                    {item.cantidad.toLocaleString('en-US')}
+                  </TableCell>
+                  <TableCell className="text-right font-bold text-primary">
+                    ${item.monto.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
             {items.length === 0 && (
-              <tr>
-                <td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              <TableRow>
+                <TableCell colSpan={6} className="p-8 text-center text-muted-foreground">
                   No hay ventas registradas para este periodo.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

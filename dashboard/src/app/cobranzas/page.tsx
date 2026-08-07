@@ -1,5 +1,8 @@
-import Navigation from '@/components/Navigation';
-import { getCobranzasOverview, getComisionesVendedores } from '@/lib/queries/cobranzas';
+import {
+  getCobranzasOverview,
+  getPaymentPerformanceByVendor,
+  getPaymentPerformanceByClient
+} from '@/lib/queries/cobranzas';
 import { CreditCard } from 'lucide-react';
 import CobranzasDashboardView from './CobranzasDashboardView';
 
@@ -16,27 +19,30 @@ export default async function CobranzasPage({ searchParams }: PageProps) {
   const tab = resolvedParams.tab || 'resumen';
 
   const overview = await getCobranzasOverview(selectedYear);
-  const vendedoresComisiones = await getComisionesVendedores(selectedYear);
+  const vendedores = await getPaymentPerformanceByVendor(selectedYear);
+  const clientes = await getPaymentPerformanceByClient(selectedYear);
 
   return (
-    <div className="container" style={{ paddingTop: '1.5rem', paddingBottom: '3rem' }}>
-      <Navigation />
+    <div className="container" style={{ paddingTop: '0.75rem', paddingBottom: '2.5rem' }}>
 
-      <header style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-          <CreditCard className="text-success" size={28} />
-          <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>Cobranzas, Comisiones y Morosidad (Módulo 4)</h1>
+      <header className="glass-panel" style={{ padding: '0.85rem 1.25rem', marginBottom: '0.85rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <CreditCard className="text-success" size={20} />
+          <h1 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>Cobranzas y Análisis de Promedio de Pago (Módulo 4)</h1>
         </div>
-        <p className="text-sub">
-          Análisis de cobranza efectiva, efectividad DSO, tramos de morosidad (Aging) y comisiones ganadas por asesor sobre cobro real.
+        <p className="text-sub" style={{ margin: '0.15rem 0 0 0', fontSize: '0.78rem' }}>
+          Análisis de cobranza efectiva real, DSO general (promedio y mediana), tramos de velocidad de pago, comportamiento por cliente, vendedor y bancos.
         </p>
       </header>
 
       <CobranzasDashboardView
         kpis={overview.kpis}
         aging={overview.aging}
-        vendedoresComisiones={vendedoresComisiones}
+        velocidad={overview.velocidad}
+        tendenciaMensual={overview.tendenciaMensual}
         bancos={overview.bancos}
+        vendedores={vendedores}
+        clientes={clientes}
         selectedYear={selectedYear}
         tab={tab}
       />

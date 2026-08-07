@@ -1,17 +1,23 @@
 'use client';
 
-import { useChat } from 'ai/react';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
 import { Bot, MessageSquare, Send, X, Loader2 } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 
 export default function ChatAgent({ dataContext }: { dataContext: any }) {
   const [isOpen, setIsOpen] = useState(false);
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
-    api: '/api/chat',
-    body: {
-      dataContext,
-    },
+  const [input, setInput] = useState('');
+  
+  const transport = useMemo(
+    () => new DefaultChatTransport({ api: '/api/chat', body: { dataContext } }),
+    [dataContext]
+  );
+
+  const { messages, sendMessage, status } = useChat({
+    transport,
   });
+  const isLoading = status === 'streaming' || status === 'submitted';
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -19,6 +25,15 @@ export default function ChatAgent({ dataContext }: { dataContext: any }) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+    if (sendMessage) {
+      sendMessage({ text: input });
+    }
+    setInput('');
+  };
 
   return (
     <>
@@ -66,7 +81,7 @@ export default function ChatAgent({ dataContext }: { dataContext: any }) {
                     : 'bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-none whitespace-pre-wrap'
                 }`}
               >
-                {m.content}
+                {(m as any).content || m.parts?.map((p: any) => p.type === 'text' ? p.text : '').join('')}
               </div>
             </div>
           ))}
@@ -82,11 +97,11 @@ export default function ChatAgent({ dataContext }: { dataContext: any }) {
 
         {/* Input Area */}
         <div className="p-3 bg-slate-800 border-t border-slate-700">
-          <form onSubmit={handleSubmit} className="flex gap-2">
+          <form onSubmit={handleFormSubmit} className="flex gap-2">
             <input
               type="text"
               value={input}
-              onChange={handleInputChange}
+              onChange={(e) => setInput(e.target.value)}
               placeholder="Ej: ¿Por qué las devoluciones son altas?"
               className="flex-1 bg-slate-900 text-white text-sm rounded-lg px-4 py-2 border border-slate-700 focus:outline-none focus:border-blue-500 transition-colors"
             />

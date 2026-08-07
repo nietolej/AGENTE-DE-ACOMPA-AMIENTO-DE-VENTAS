@@ -3,55 +3,102 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PackageSearch, TrendingUp, AlertCircle, CheckCircle2, ShieldAlert, AlertTriangle, Download, Filter, Search, ArrowUpDown, RefreshCw, ShoppingCart, Layers } from 'lucide-react';
 import {
-  Boxes, DollarSign, Calendar, TrendingUp, Download, AlertTriangle,
-  Search, ShieldAlert, CheckCircle2, ShoppingCart, RefreshCw, Layers
-} from 'lucide-react';
-import {
-  InventoryIntelligenceKPIs, InventoryItemIntelligence, InventoryGroupHealth
+  InventoryIntelligenceKPIs, InventoryItemIntelligence, InventoryGroupHealth, InventoryValuationData
 } from '@/lib/types';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+} from 'recharts';
 import { KpiCard } from '@/components/ui/KpiCard';
 
 interface Props {
   kpis: InventoryIntelligenceKPIs;
   items: InventoryItemIntelligence[];
   grupos: InventoryGroupHealth[];
+  valorizacion_mensual: InventoryValuationData[];
   selectedYear: string;
   tab: string;
   search: string;
   filterState: string;
+  limit: string;
 }
 
 export default function InventoryDashboardView({
   kpis,
   items,
   grupos,
+  valorizacion_mensual,
   selectedYear,
   tab,
   search: initialSearch,
-  filterState: initialFilterState
+  filterState: initialFilterState,
+  limit: initialLimit
 }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState(initialSearch);
   const [filterState, setFilterState] = useState(initialFilterState);
+  const [limitState, setLimitState] = useState(initialLimit);
   const [desiredCoverageDays, setDesiredCoverageDays] = useState<number>(90);
+  const [sortConfig, setSortConfig] = useState<{ key: keyof InventoryItemIntelligence | null; direction: 'asc' | 'desc' }>({ key: null, direction: 'asc' });
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
+  const requestSort = (key: keyof InventoryItemIntelligence) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedItems = React.useMemo(() => {
+    let sortableItems = [...items];
+    if (sortConfig.key !== null) {
+      sortableItems.sort((a, b) => {
+        const aVal = a[sortConfig.key!];
+        const bVal = b[sortConfig.key!];
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [items, sortConfig]);
+
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    router.push(`/inventario?tab=${tab}&year=${selectedYear}&search=${encodeURIComponent(search)}&state=${filterState}`);
+    router.push(`/inventario?year=${selectedYear}&tab=${tab}&search=${encodeURIComponent(search)}&state=${encodeURIComponent(filterState)}&limit=${encodeURIComponent(limitState)}`);
   };
 
   const handleFilterStateChange = (newState: string) => {
     setFilterState(newState);
-    router.push(`/inventario?tab=${tab}&year=${selectedYear}&search=${encodeURIComponent(search)}&state=${newState}`);
+    router.push(`/inventario?year=${selectedYear}&tab=${tab}&search=${encodeURIComponent(search)}&state=${encodeURIComponent(newState)}&limit=${encodeURIComponent(limitState)}`);
   };
 
-  const handleYearChange = (newYear: string) => {
-    router.push(`/inventario?tab=${tab}&year=${newYear}&search=${encodeURIComponent(search)}&state=${filterState}`);
+  const handleLimitChange = (newLimit: string) => {
+    setLimitState(newLimit);
+    router.push(`/inventario?year=${selectedYear}&tab=${tab}&search=${encodeURIComponent(search)}&state=${encodeURIComponent(filterState)}&limit=${encodeURIComponent(newLimit)}`);
+  };
+
+  const handleYearChange = (yr: string) => {
+    if (yr === 'todos') {
+      router.push(`/inventario?tab=${tab}&year=todos&search=${encodeURIComponent(search)}&state=${encodeURIComponent(filterState)}&limit=${encodeURIComponent(limitState)}`);
+      return;
+    }
+    
+    let currentYears = selectedYear.split(',').filter(y => y !== 'todos' && y !== '');
+    if (currentYears.includes(yr)) {
+      currentYears = currentYears.filter(y => y !== yr);
+    } else {
+      currentYears.push(yr);
+    }
+    
+    const newYear = currentYears.length > 0 ? currentYears.join(',') : 'todos';
+    router.push(`/inventario?tab=${tab}&year=${newYear}&search=${encodeURIComponent(search)}&state=${encodeURIComponent(filterState)}&limit=${encodeURIComponent(limitState)}`);
   };
 
   const handleTabChange = (newTab: string) => {
-    router.push(`/inventario?tab=${newTab}&year=${selectedYear}&search=${encodeURIComponent(search)}&state=${filterState}`);
+    router.push(`/inventario?tab=${newTab}&year=${selectedYear}&search=${encodeURIComponent(search)}&state=${encodeURIComponent(filterState)}&limit=${encodeURIComponent(limitState)}`);
   };
 
   const exportInventoryCSV = () => {
@@ -138,7 +185,7 @@ export default function InventoryDashboardView({
 
       {/* Bar de Controles y Búsqueda */}
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: '0.5rem', flex: 1, minWidth: '280px' }}>
+        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.5rem', flex: 1, minWidth: '300px' }}>
           <div style={{ position: 'relative', width: '100%' }}>
             <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
             <input
@@ -189,10 +236,32 @@ export default function InventoryDashboardView({
             }}
           >
             <option value="todos" style={{ backgroundColor: '#18181b' }}>Todos los Estados de Salud</option>
+            <option value="STOCK_CERO" style={{ backgroundColor: '#18181b' }}>⭕ Solo Stock Cero</option>
             <option value="RIESGO_QUIEBRE" style={{ backgroundColor: '#18181b' }}>🔴 Riesgo de Quiebre</option>
             <option value="DEMANDA_REPRIMIDA" style={{ backgroundColor: '#18181b' }}>🟡 Demanda Reprimida</option>
             <option value="SOBRESTOCK" style={{ backgroundColor: '#18181b' }}>🔵 Sobre-stock (&gt;6 mes)</option>
             <option value="SALUDABLE" style={{ backgroundColor: '#18181b' }}>🟢 Saludables</option>
+          </select>
+
+          <select
+            value={limitState}
+            onChange={(e) => handleLimitChange(e.target.value)}
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '8px',
+              color: '#fff',
+              padding: '0.6rem 1rem',
+              fontSize: '0.85rem',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="50" style={{ backgroundColor: '#18181b' }}>Mostrar 50 repuestos</option>
+            <option value="100" style={{ backgroundColor: '#18181b' }}>Mostrar 100 repuestos</option>
+            <option value="150" style={{ backgroundColor: '#18181b' }}>Mostrar 150 repuestos</option>
+            <option value="200" style={{ backgroundColor: '#18181b' }}>Mostrar 200 repuestos</option>
+            <option value="500" style={{ backgroundColor: '#18181b' }}>Mostrar 500 repuestos</option>
+            <option value="todos" style={{ backgroundColor: '#18181b' }}>Mostrar TODOS los repuestos</option>
           </select>
 
           <button
@@ -215,6 +284,39 @@ export default function InventoryDashboardView({
           </button>
         </div>
       </div>
+
+      {/* Gráfico de Valorización Mensual */}
+      {valorizacion_mensual && valorizacion_mensual.length > 0 && (
+        <div className="glass-panel" style={{ padding: '1.5rem', marginTop: '0.5rem' }}>
+          <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+            Valorización del Inventario por Mes (Histórico)
+          </h3>
+          <div style={{ width: '100%', height: '300px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={valorizacion_mensual} margin={{ top: 10, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis dataKey="mes" stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis 
+                  stroke="var(--text-secondary)" 
+                  fontSize={12} 
+                  tickLine={false} 
+                  axisLine={false}
+                  tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`}
+                />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#18181b', borderColor: 'rgba(255,255,255,0.1)', color: '#fff', borderRadius: '8px' }}
+                  formatter={(value: any, name: any) => [`$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, name]}
+                  labelStyle={{ color: 'var(--text-secondary)', marginBottom: '0.25rem' }}
+                />
+                <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                <Bar dataKey="almacen01" stackId="a" fill="var(--accent-primary)" name="Almacén 01" />
+                <Bar dataKey="almacen03" stackId="a" fill="#10b981" name="Almacén 03" />
+                <Bar dataKey="almacen06" stackId="a" fill="#f59e0b" name="Almacén 06" radius={[4, 4, 0, 0]} maxBarSize={60} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.1)', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
@@ -278,24 +380,27 @@ export default function InventoryDashboardView({
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-          {['todos', '2026', '2025', '2024'].map((yr) => (
-            <button
-              key={yr}
-              onClick={() => handleYearChange(yr)}
-              style={{
-                backgroundColor: selectedYear === yr ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.05)',
-                color: selectedYear === yr ? '#fff' : 'var(--text-secondary)',
-                border: selectedYear === yr ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
-                padding: '0.35rem 0.8rem',
-                borderRadius: '6px',
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              {yr === 'todos' ? 'Todos' : yr}
-            </button>
-          ))}
+          {['todos', '2026', '2025', '2024', '2023'].map((yr) => {
+            const isSelected = yr === 'todos' ? selectedYear === 'todos' : selectedYear.split(',').includes(yr);
+            return (
+              <button
+                key={yr}
+                onClick={() => handleYearChange(yr)}
+                style={{
+                  backgroundColor: isSelected ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.05)',
+                  color: isSelected ? '#fff' : 'var(--text-secondary)',
+                  border: isSelected ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
+                  padding: '0.35rem 0.8rem',
+                  borderRadius: '6px',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                {yr === 'todos' ? 'Todos' : yr}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -312,90 +417,81 @@ export default function InventoryDashboardView({
           </div>
 
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  <th style={{ padding: '1rem', width: '50px', textAlign: 'center' }}>#</th>
-                  <th style={{ padding: '1rem' }}>Código / Descripción</th>
-                  <th style={{ padding: '1rem' }}>Grupo</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Stock Actual</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Días con Stock (DIS)</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Vel. Básica</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Vel. Real Ajustada</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Cobertura Real</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Venta Perdida ($)</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Estado Salud</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px] text-center">#</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => requestSort('nomart')}>Código / Descripción{sortConfig.key === 'nomart' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => requestSort('grupo')}>Grupo{sortConfig.key === 'grupo' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                  <TableHead className="text-right cursor-pointer select-none" onClick={() => requestSort('stock_actual')}>Stock Actual{sortConfig.key === 'stock_actual' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                  <TableHead className="text-center cursor-pointer select-none" onClick={() => requestSort('dias_con_stock')}>Días con Stock (DIS){sortConfig.key === 'dias_con_stock' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                  <TableHead className="text-right cursor-pointer select-none" onClick={() => requestSort('velocidad_basica')}>Vel. Básica{sortConfig.key === 'velocidad_basica' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                  <TableHead className="text-right cursor-pointer select-none" onClick={() => requestSort('velocidad_ajustada')}>Vel. Real Ajustada{sortConfig.key === 'velocidad_ajustada' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                  <TableHead className="text-center cursor-pointer select-none" onClick={() => requestSort('meses_cobertura_real')}>Cobertura Real{sortConfig.key === 'meses_cobertura_real' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                  <TableHead className="text-right cursor-pointer select-none" onClick={() => requestSort('venta_perdida_estimada')}>Venta Perdida ($){sortConfig.key === 'venta_perdida_estimada' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                  <TableHead className="text-center cursor-pointer select-none" onClick={() => requestSort('estado_salud')}>Estado Salud{sortConfig.key === 'estado_salud' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center p-12 text-muted-foreground">
                       No se encontraron repuestos con los filtros seleccionados.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
-                  items.map((item, idx) => (
-                    <tr key={`${item.codart}-${idx}`} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                      <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                  sortedItems.map((item, idx) => (
+                    <TableRow key={`${item.codart}-${idx}`}>
+                      <TableCell className="text-center font-bold text-muted-foreground">
                         {idx + 1}
-                      </td>
-                      <td style={{ padding: '1rem' }}>
-                        <Link href={`/productos/${encodeURIComponent(item.codart)}`} style={{ color: 'var(--accent-primary)', fontWeight: 700, textDecoration: 'none' }}>
+                      </TableCell>
+                      <TableCell>
+                        <Link href={`/productos/${encodeURIComponent(item.codart)}`} className="text-primary font-bold hover:underline">
                           {item.codart}
                         </Link>
-                        <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: 500 }}>{item.nomart}</div>
-                      </td>
-                      <td style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                        <div className="text-foreground text-[0.85rem] font-medium">{item.nomart}</div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
                         {item.grupo}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: item.stock_actual <= 0 ? '#f87171' : '#fff' }}>
-                        {item.stock_actual.toLocaleString()}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)', padding: '0.2rem 0.5rem', borderRadius: '12px', fontSize: '0.8rem' }}>
+                      </TableCell>
+                      <TableCell className={`text-right font-bold ${item.stock_actual <= 0 ? 'text-red-400' : 'text-foreground'}`}>
+                        {item.stock_actual.toLocaleString('en-US')}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="bg-white/10 px-2 py-0.5 rounded-full text-xs">
                           {item.dias_con_stock}d / {item.dias_periodo_total}d ({item.pct_disponibilidad}%)
                         </span>
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', color: 'var(--text-secondary)' }}>
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
                         {item.velocidad_basica} u/d
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 800, color: '#60a5fa', fontFamily: 'var(--font-geist-mono)' }}>
+                      </TableCell>
+                      <TableCell className="text-right font-extrabold text-blue-400 font-mono">
                         {item.velocidad_ajustada} u/d
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <span style={{ fontWeight: 600, color: item.meses_cobertura_real < 0.5 ? '#f87171' : item.meses_cobertura_real > 6 ? '#60a5fa' : '#4ade80' }}>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className={`font-semibold ${item.meses_cobertura_real < 0.5 ? 'text-red-400' : item.meses_cobertura_real > 6 ? 'text-blue-400' : 'text-green-400'}`}>
                           {item.meses_cobertura_real} mes({item.dias_cobertura_real}d)
                         </span>
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: item.venta_perdida_estimada > 0 ? '#f87171' : 'var(--text-secondary)' }}>
+                      </TableCell>
+                      <TableCell className={`text-right font-bold ${item.venta_perdida_estimada > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
                         ${item.venta_perdida_estimada.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <span style={{
-                          padding: '0.25rem 0.6rem',
-                          borderRadius: '6px',
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          backgroundColor:
-                            item.estado_salud === 'RIESGO_QUIEBRE' ? 'rgba(239, 68, 68, 0.2)' :
-                            item.estado_salud === 'DEMANDA_REPRIMIDA' ? 'rgba(234, 179, 8, 0.2)' :
-                            item.estado_salud === 'SOBRESTOCK' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(34, 197, 94, 0.15)',
-                          color:
-                            item.estado_salud === 'RIESGO_QUIEBRE' ? '#f87171' :
-                            item.estado_salud === 'DEMANDA_REPRIMIDA' ? '#fde047' :
-                            item.estado_salud === 'SOBRESTOCK' ? '#60a5fa' : '#4ade80'
-                        }}>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className={`px-2 py-1 rounded text-xs font-bold border ${
+                          item.estado_salud === 'RIESGO_QUIEBRE' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                          item.estado_salud === 'DEMANDA_REPRIMIDA' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
+                          item.estado_salud === 'SOBRESTOCK' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-green-500/15 text-green-400 border-green-500/30'
+                        }`}>
                           {item.estado_salud === 'RIESGO_QUIEBRE' ? '🔴 RIESGO QUIEBRE' :
                            item.estado_salud === 'DEMANDA_REPRIMIDA' ? '🟡 DEMANDA REPRIMIDA' :
                            item.estado_salud === 'SOBRESTOCK' ? '🔵 SOBRESTOCK' : '🟢 SALUDABLE'}
                         </span>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}
@@ -415,6 +511,31 @@ export default function InventoryDashboardView({
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Cobertura Deseada:</span>
+              
+              {/* Input editable para días personalizados */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.2)', padding: '0.25rem 0.5rem', borderRadius: '6px' }}>
+                <input 
+                  type="number" 
+                  min="1"
+                  value={desiredCoverageDays || ''}
+                  onChange={(e) => setDesiredCoverageDays(parseInt(e.target.value) || 0)}
+                  style={{
+                    width: '50px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#fff',
+                    fontSize: '0.9rem',
+                    fontWeight: 'bold',
+                    textAlign: 'center',
+                    outline: 'none'
+                  }}
+                />
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Días</span>
+              </div>
+
+              <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255,255,255,0.1)', margin: '0 0.25rem' }}></div>
+
+              {/* Botones de acceso rápido */}
               {[60, 90, 120, 180].map((dias) => (
                 <button
                   key={dias}
@@ -427,77 +548,80 @@ export default function InventoryDashboardView({
                     borderRadius: '6px',
                     fontSize: '0.85rem',
                     fontWeight: 700,
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
                   }}
                 >
-                  {dias} Días ({Math.round(dias/30)} meses)
+                  {dias}
                 </button>
               ))}
             </div>
           </div>
 
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  <th style={{ padding: '1rem', width: '50px', textAlign: 'center' }}>#</th>
-                  <th style={{ padding: '1rem' }}>Código / Descripción</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Stock Actual</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>En Tránsito</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>En Producción</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Velocidad Ajustada</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Demanda {desiredCoverageDays}d</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Sugerido de Compra (Unid)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px] text-center">#</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => requestSort('nomart')}>Código / Descripción{sortConfig.key === 'nomart' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                  <TableHead className="text-right cursor-pointer select-none" onClick={() => requestSort('stock_actual')}>Stock Actual{sortConfig.key === 'stock_actual' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                  <TableHead className="text-right cursor-pointer select-none" onClick={() => requestSort('pendiente_transito')}>En Tránsito{sortConfig.key === 'pendiente_transito' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                  <TableHead className="text-right cursor-pointer select-none" onClick={() => requestSort('pendiente_produccion')}>En Producción{sortConfig.key === 'pendiente_produccion' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                  <TableHead className="text-right cursor-pointer select-none" onClick={() => requestSort('velocidad_ajustada')}>Velocidad Ajustada{sortConfig.key === 'velocidad_ajustada' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                  <TableHead className="text-right cursor-pointer select-none" onClick={() => requestSort('velocidad_ajustada')}>Demanda {desiredCoverageDays}d{sortConfig.key === 'velocidad_ajustada' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                  <TableHead className="text-right cursor-pointer select-none" onClick={() => requestSort('sugerido_compra_90d')}>Sugerido de Compra (Unid){sortConfig.key === 'sugerido_compra_90d' ? (sortConfig.direction === 'asc' ? ' 🔼' : ' 🔽') : ''}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center p-12 text-muted-foreground">
                       No hay repuestos en el listado para calcular sugerido.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
-                  items.map((item, idx) => {
+                  sortedItems.map((item, idx) => {
                     const demanda = item.velocidad_ajustada * desiredCoverageDays;
                     const disp = item.stock_actual + item.pendiente_transito + item.pendiente_produccion;
                     const sug = Math.max(0, Math.ceil(demanda - disp));
 
                     return (
-                      <tr key={`${item.codart}-${idx}`} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                        <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                      <TableRow key={`${item.codart}-${idx}`}>
+                        <TableCell className="text-center font-bold text-muted-foreground">
                           {idx + 1}
-                        </td>
-                        <td style={{ padding: '1rem' }}>
-                          <Link href={`/productos/${encodeURIComponent(item.codart)}`} style={{ color: 'var(--accent-primary)', fontWeight: 700, textDecoration: 'none' }}>
+                        </TableCell>
+                        <TableCell>
+                          <Link href={`/productos/${encodeURIComponent(item.codart)}`} className="text-primary font-bold hover:underline">
                             {item.codart}
                           </Link>
-                          <div style={{ color: '#fff', fontSize: '0.85rem' }}>{item.nomart}</div>
-                        </td>
-                        <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 600 }}>
+                          <div className="text-foreground text-[0.85rem]">{item.nomart}</div>
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">
                           {item.stock_actual}
-                        </td>
-                        <td style={{ padding: '1rem', textAlign: 'right', color: '#60a5fa' }}>
+                        </TableCell>
+                        <TableCell className="text-right text-blue-400">
                           {item.pendiente_transito > 0 ? `+${item.pendiente_transito}` : '0'}
-                        </td>
-                        <td style={{ padding: '1rem', textAlign: 'right', color: '#fde047' }}>
+                        </TableCell>
+                        <TableCell className="text-right text-yellow-400">
                           {item.pendiente_produccion > 0 ? `+${item.pendiente_produccion}` : '0'}
-                        </td>
-                        <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 600, color: '#60a5fa' }}>
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-blue-400">
                           {item.velocidad_ajustada} u/d
-                        </td>
-                        <td style={{ padding: '1rem', textAlign: 'right', color: 'var(--text-secondary)' }}>
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">
                           {Math.round(demanda)} unid
-                        </td>
-                        <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 800, color: sug > 0 ? '#4ade80' : 'var(--text-secondary)', fontSize: '1.05rem', fontFamily: 'var(--font-geist-mono)' }}>
-                          {sug > 0 ? `${sug.toLocaleString()} UNID` : '✓ Abastecido'}
-                        </td>
-                      </tr>
+                        </TableCell>
+                        <TableCell className={`text-right font-extrabold font-mono text-[1.05rem] ${sug > 0 ? 'text-green-400' : 'text-muted-foreground'}`}>
+                          <span className={`px-2 py-1 rounded text-xs font-bold font-mono ${sug > 0 ? 'bg-green-500/15 text-green-400' : 'bg-white/5 text-muted-foreground'}`}>
+                            {sug > 0 ? `${sug.toLocaleString('en-US')} UNID` : '✓ Abastecido'}
+                          </span>
+                        </TableCell>
+                      </TableRow>
                     );
                   })
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}
@@ -512,60 +636,60 @@ export default function InventoryDashboardView({
           </div>
 
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  <th style={{ padding: '1rem', width: '50px', textAlign: 'center' }}>#</th>
-                  <th style={{ padding: '1rem' }}>Código Grupo</th>
-                  <th style={{ padding: '1rem' }}>Familia / Nombre</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Total Ítems</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Capital Inmovilizado ($)</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Ítems en Quiebre</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Ítems Sobre-stock</th>
-                  <th style={{ padding: '1rem', textAlign: 'right' }}>Venta Perdida ($)</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px] text-center">#</TableHead>
+                  <TableHead>Código Grupo</TableHead>
+                  <TableHead>Familia / Nombre</TableHead>
+                  <TableHead className="text-center">Total Ítems</TableHead>
+                  <TableHead className="text-right">Capital Inmovilizado ($)</TableHead>
+                  <TableHead className="text-center">Ítems en Quiebre</TableHead>
+                  <TableHead className="text-center">Ítems Sobre-stock</TableHead>
+                  <TableHead className="text-right">Venta Perdida ($)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {grupos.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center p-12 text-muted-foreground">
                       No hay familias para mostrar.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   grupos.map((g, idx) => (
-                    <tr key={`${g.grupo}-${idx}`} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                      <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                    <TableRow key={`${g.grupo}-${idx}`}>
+                      <TableCell className="text-center font-bold text-muted-foreground">
                         {idx + 1}
-                      </td>
-                      <td style={{ padding: '1rem', fontFamily: 'var(--font-geist-mono)', fontWeight: 600, color: 'var(--accent-primary)' }}>
+                      </TableCell>
+                      <TableCell className="font-mono font-bold text-primary">
                         {g.grupo}
-                      </td>
-                      <td style={{ padding: '1rem', fontWeight: 600 }}>
+                      </TableCell>
+                      <TableCell className="font-semibold">
                         {g.nomgrupo}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center' }}>
-                        <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.8rem' }}>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="bg-white/10 px-2 py-0.5 rounded-full text-xs">
                           {g.total_items} ítems
                         </span>
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: 'var(--accent-primary)' }}>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-primary">
                         ${g.monto_inventario.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 700, color: g.items_quiebre > 0 ? '#f87171' : 'var(--text-secondary)' }}>
+                      </TableCell>
+                      <TableCell className={`text-center font-bold ${g.items_quiebre > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
                         {g.items_quiebre}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 700, color: g.items_sobrestock > 0 ? '#60a5fa' : 'var(--text-secondary)' }}>
+                      </TableCell>
+                      <TableCell className={`text-center font-bold ${g.items_sobrestock > 0 ? 'text-blue-400' : 'text-muted-foreground'}`}>
                         {g.items_sobrestock}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: g.venta_perdida_grupo > 0 ? '#f87171' : 'var(--text-secondary)' }}>
+                      </TableCell>
+                      <TableCell className={`text-right font-bold ${g.venta_perdida_grupo > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>
                         ${g.venta_perdida_grupo.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}

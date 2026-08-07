@@ -1,4 +1,5 @@
 import { parseTxtFile } from './parser';
+import { ClientStatementRow } from '../types';
 
 // ==========================================
 // MOCKS DE FALLBACK VISUAL
@@ -82,6 +83,12 @@ function matchesYear(emisionDateStr: string | null | undefined, yearParam: numbe
   return selectedYears.includes(emisionYear);
 }
 
+function isFacturaValida(f: any): boolean {
+  if (!f) return false;
+  const anulada = String(f.anulada).toLowerCase();
+  return anulada !== 'true' && anulada !== 't' && anulada !== '1';
+}
+
 export async function getClientOverviewYear(codcli: string, year: number | string, incluirInactivos: boolean = false) {
   try {
     const [facturas, facturasRen, devoluciones, devolucionesRen, cobranzas, pagosDetalle] = await Promise.all([
@@ -102,6 +109,7 @@ export async function getClientOverviewYear(codcli: string, year: number | strin
     const facClienteAnio = facturas.filter(f => 
       f.cliente === codcli && 
       matchesYear(f.emision, year) &&
+      isFacturaValida(f) &&
       f.tipo !== 'NC' &&
       (f.numfac && f.numfac.toUpperCase().startsWith('D'))
     );
@@ -111,21 +119,91 @@ export async function getClientOverviewYear(codcli: string, year: number | strin
     const pedidos_compra = new Set(facClienteAnio.map(f => f.emision)).size;
     const pedido_promedio = pedidos_compra > 0 ? venta_total / pedidos_compra : 0;
     
+    const bqtoOrdersClient = new Map<string, number>();
+    const ccsOrdersClient = new Map<string, number>();
+    facClienteAnio.forEach(f => {
+      const v = (f.codven || '').toUpperCase();
+      const amt = parseFloat(f.tot_fac || '0');
+      const pedId = f.emision;
+      if (v === '06' || v.startsWith('C')) {
+        ccsOrdersClient.set(pedId, (ccsOrdersClient.get(pedId) || 0) + amt);
+      } else {
+        bqtoOrdersClient.set(pedId, (bqtoOrdersClient.get(pedId) || 0) + amt);
+      }
+    });
+    const totalBqtoClient = Array.from(bqtoOrdersClient.values()).reduce((a, b) => a + b, 0);
+    const pedido_promedio_bqto = bqtoOrdersClient.size > 0 ? totalBqtoClient / bqtoOrdersClient.size : 0;
+    const totalCcsClient = Array.from(ccsOrdersClient.values()).reduce((a, b) => a + b, 0);
+    const pedido_promedio_ccs = ccsOrdersClient.size > 0 ? totalCcsClient / ccsOrdersClient.size : 0;
+    
     const facturasNums = new Set(facClienteAnio.map(f => f.numfac));
     const facRenCliente = facturasRen.filter(r => facturasNums.has(r.numfac));
     const venta_items = facRenCliente.reduce((sum, r) => sum + parseFloat(r.cantidad || '0'), 0);
     
-    // Descuento Ponderado: 100 - (Sum(tot_ren) / Sum(cantidad * precio)) * 100
+    // Descuento Ponderado: Renglones (facturas_ren) + NCs en facturas_enc + NCs en cobranzas (Pronto Pago)
     let sumBruto = 0;
-    let sumNeto = 0;
+    let sumNetoLineas = 0;
     facRenCliente.forEach(r => {
       const cant = parseFloat(r.cantidad || '0');
       const precio = parseFloat(r.precio || '0');
       const tot = parseFloat(r.tot_ren || '0');
       sumBruto += (cant * precio);
-      sumNeto += tot;
+      sumNetoLineas += tot;
     });
-    const descuento_ponderado = sumBruto > 0 ? (100 - (sumNeto / sumBruto) * 100) : 0;
+    const descLineas = sumBruto > 0 ? (sumBruto - sumNetoLineas) : 0;
+
+    const devNumsSetClient = new Set(devoluciones.map(d => d.numdevo));
+    const ncDescuentosClient = facturas.filter(f => 
+      f.cliente === codcli && 
+      matchesYear(f.emision, year) && 
+      isFacturaValida(f) &&
+      ((f.numfac && f.numfac.toUpperCase().startsWith('NC')) || f.tipo === 'NC') &&
+      !devNumsSetClient.has(f.numfac)
+    );
+    const descNCsClient = ncDescuentosClient.reduce((sum, f) => sum + Math.abs(parseFloat(f.tot_fac || '0')), 0);
+
+    // NCs de Cobranza (Pronto Pago / Descuentos Financieros en cobranzas.txt)
+    // Excluir Devoluciones y Retenciones Fiscales (IVA, ISLR, Retención 75% IVA, NCCLIESP)
+    const ncCobranzasClient = cobranzas.filter(c => {
+      if ((c.numcli || c.codmovcli) !== codcli || c.tipo !== 'NC' || !matchesYear(c.emision, year)) return false;
+      const conc = (c.concepto || '').toUpperCase();
+      const ref = (c.refer || '').toUpperCase();
+      if (conc.includes('DEVOLUCION') || conc.includes('DEVO') || conc.includes('RETENCION') || conc.includes('IVA') || conc.includes('ISLR') || ref === 'NCCLIESP') {
+        return false;
+      }
+      return true;
+    });
+    const descNCsCobranzas = ncCobranzasClient.reduce((sum, c) => sum + Math.abs(parseFloat(c.importe || '0')), 0);
+
+    const descuento_factura_monto = Math.round((descLineas + descNCsClient) * 100) / 100;
+    const descuento_pp_monto = Math.round(descNCsCobranzas * 100) / 100;
+    const descuento_total_monto = Math.round((descuento_factura_monto + descuento_pp_monto) * 100) / 100;
+    const descuento_monto = descuento_factura_monto;
+
+    // REGLA DE NEGOCIO: Excluir facturas pendientes por pagar del denominador.
+    // Solo considerar facturas pagadas al 100% (canceladas) para el cálculo de descuentos,
+    // ya que si no está pagada, no se sabe si tomarán el descuento por pronto pago.
+    const saldoFacturas = new Map<string, number>();
+    cobranzas.forEach(c => {
+      if ((c.numcli || c.codmovcli) === codcli && c.numdoc) {
+         const importe = parseFloat(c.importe || '0');
+         saldoFacturas.set(c.numdoc, (saldoFacturas.get(c.numdoc) || 0) + importe);
+      }
+    });
+
+    const baseFacturasProcesadas = facClienteAnio
+      .filter(f => {
+         const saldo = saldoFacturas.get(f.numfac);
+         // Está cancelada si tiene registros en cobranzas y su saldo es <= 0.05
+         return saldo !== undefined && saldo <= 0.05;
+      })
+      .reduce((sum, f) => sum + parseFloat(f.tot_fac || '0'), 0);
+
+    const baseVentaDescuento = baseFacturasProcesadas > 0 ? baseFacturasProcesadas : (venta_total > 0 ? venta_total : (sumBruto > 0 ? sumBruto : 0));
+    const descuento_factura_ponderado = baseVentaDescuento > 0 ? Math.min(100, Math.round(((descuento_factura_monto / baseVentaDescuento) * 100) * 100) / 100) : 0;
+    const descuento_pp_ponderado = baseVentaDescuento > 0 ? Math.min(100, Math.round(((descuento_pp_monto / baseVentaDescuento) * 100) * 100) / 100) : 0;
+    const descuento_total_ponderado = baseVentaDescuento > 0 ? Math.min(100, Math.round(((descuento_total_monto / baseVentaDescuento) * 100) * 100) / 100) : 0;
+    const descuento_ponderado = descuento_factura_ponderado;
 
     // 2. DEVOLUCIONES
     const devClienteAnio = devoluciones.filter(d => 
@@ -146,7 +224,7 @@ export async function getClientOverviewYear(codcli: string, year: number | strin
 
     // 3. COBRANZAS Y DEUDA
     // Para la deuda y el estado de cuenta, necesitamos todas las cobranzas del cliente (histórico total)
-    const cobCliente = cobranzas.filter(c => c.codmovcli === codcli);
+    const cobCliente = cobranzas.filter((c: any) => (c.codmovcli || c.numcli) === codcli);
     
     // Build exchange rate map
     const tasas = new Map<string, number>();
@@ -172,18 +250,67 @@ export async function getClientOverviewYear(codcli: string, year: number | strin
 
     // Calcular Estado de Cuenta
     const facturasCxc = new Map<string, any>();
+    
+    // 1. Seed from facturas_enc.txt to catch all unpaid invoices
+    const is2025OrLater = (dateStr: string) => {
+      if (!dateStr) return false;
+      let yStr = '';
+      if (dateStr.includes('/')) {
+        const parts = dateStr.split('/');
+        yStr = parts.length === 3 ? parts[2] : '';
+      } else if (dateStr.includes('-')) {
+        yStr = dateStr.substring(0, 4);
+      } else {
+        yStr = dateStr.substring(0, 4);
+      }
+      const y = parseInt(yStr);
+      return !isNaN(y) && y >= 2025;
+    };
+
+    facturas.filter(f => f.cliente === codcli && isFacturaValida(f) && is2025OrLater(f.emision)).forEach(f => {
+      if (f.numfac && f.numfac.toUpperCase().startsWith('NC')) return;
+      
+      const val = Math.abs(parseFloat((f.tot_fac || '0').replace(',', '.')));
+      if (!facturasCxc.has(f.numfac)) {
+        facturasCxc.set(f.numfac, {
+          nota: f.numfac,
+          deuda_original: val,
+          abonado: 0,
+          saldo: val,
+          emision: f.emision,
+          vencimiento: f.vence || f.emision 
+        });
+      }
+    });
+
+    // 2. Process cobranzas.txt for payments and additional debt (ND)
     cobCliente.forEach(c => {
+      if (!is2025OrLater(c.emision)) return;
+
       if (!facturasCxc.has(c.numdoc)) {
-        facturasCxc.set(c.numdoc, { nota: c.numdoc, deuda_original: 0, abonado: 0, saldo: 0, vencimiento: c.vence || c.emision });
+        facturasCxc.set(c.numdoc, { 
+          nota: c.numdoc, 
+          deuda_original: 0, 
+          abonado: 0, 
+          saldo: 0, 
+          emision: c.emision,
+          vencimiento: c.vence || c.emision 
+        });
       }
       const fac = facturasCxc.get(c.numdoc);
       
-      let importeRaw = parseFloat(c.importe || '0');
+      // FIX: Replace comma with dot for parseFloat
+      let rawImporteStr = (c.importe || '0').replace(',', '.');
+      let importeRaw = parseFloat(rawImporteStr);
       // Si empieza con 000, es en Bs. Convertir a USD usando la tasa del día de la emisión del documento original
       if (c.numdoc && c.numdoc.startsWith('000')) {
         // Encontrar la emisión original de la factura para saber qué tasa usar
-        const original = cobCliente.find(oc => oc.numdoc === c.numdoc && oc.importe > 0);
-        const fechaParaTasa = (original && original.emision) ? original.emision : c.emision;
+        const original = cobCliente.find(oc => oc.numdoc === c.numdoc && parseFloat((oc.importe || '0').replace(',', '.')) > 0);
+        let fechaParaTasa = (original && original.emision) ? original.emision : c.emision;
+        if (fechaParaTasa && fechaParaTasa.includes('/')) {
+          const parts = fechaParaTasa.split('/');
+          if (parts.length === 3) fechaParaTasa = `${parts[2]}${parts[1].padStart(2,'0')}${parts[0].padStart(2,'0')}`;
+        }
         const tasaDelDia = getTasa(fechaParaTasa);
         if (tasaDelDia > 0) {
           importeRaw = importeRaw / tasaDelDia;
@@ -191,18 +318,63 @@ export async function getClientOverviewYear(codcli: string, year: number | strin
       }
       const importe = importeRaw;
 
-      if (importe > 0) {
-        fac.deuda_original += importe;
-        fac.saldo += importe;
+      const tipoDoc = (c.tipo || '').trim().toUpperCase();
+      const val = Math.abs(importe);
+      
+      if (tipoDoc === 'FC' || tipoDoc === 'ND') {
+        if (fac.deuda_original === 0) {
+          fac.deuda_original += val;
+          fac.saldo += val;
+        }
+        // Always update emision and vencimiento just in case
+        fac.emision = c.emision;
+        fac.vencimiento = c.vence || c.emision;
       } else {
-        fac.abonado += Math.abs(importe);
-        fac.saldo += importe; // importe is negative
+        fac.abonado += val;
+        fac.saldo -= val;
       }
     });
 
+    const refDate = new Date();
+    refDate.setHours(0,0,0,0);
+
+    const parseVenceDate = (venceStr: string) => {
+      if (!venceStr) return null;
+      let clean = venceStr.trim();
+      if (clean.includes('/')) {
+        const parts = clean.split('/');
+        if (parts.length === 3) clean = `${parts[2]}${parts[1].padStart(2,'0')}${parts[0].padStart(2,'0')}`;
+      } else if (clean.includes('-')) {
+        const parts = clean.substring(0, 10).split('-');
+        if (parts.length === 3) clean = `${parts[0]}${parts[1].padStart(2,'0')}${parts[2].padStart(2,'0')}`;
+      }
+      if (clean.length === 8) {
+        const y = parseInt(clean.substring(0, 4));
+        const m = parseInt(clean.substring(4, 6)) - 1;
+        const d = parseInt(clean.substring(6, 8));
+        return new Date(y, m, d);
+      }
+      return null;
+    };
+
     const estado_cuenta = Array.from(facturasCxc.values())
       .filter(f => f.saldo > 0.01)
-      .map(f => ({ ...f, mora: 0 })); // mora could be calculated comparing vencimiento to today
+      .map(f => {
+        const venceDate = parseVenceDate(f.vencimiento);
+        let mora = 0;
+        let estado_texto = "Al día";
+        if (venceDate) {
+          const diffTime = refDate.getTime() - venceDate.getTime();
+          mora = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          if (mora > 0) {
+            estado_texto = `${mora} días de vencido`;
+          } else if (mora < 0) {
+            estado_texto = `${Math.abs(mora)} días por vencer`;
+          }
+        }
+        return { ...f, mora, estado_texto };
+      });
     
     const deuda_actual = estado_cuenta.reduce((sum, f) => sum + f.saldo, 0);
     
@@ -211,20 +383,27 @@ export async function getClientOverviewYear(codcli: string, year: number | strin
     const vencimiento_cxc = estado_cuenta.length > 0 ? estado_cuenta[0].vencimiento : null;
 
     // Días de pago promedio (solo para el año en curso)
+    const facEmisionMapClient = new Map<string, string>();
+    facturas.filter(f => f.cliente === codcli).forEach(f => {
+      if (f.numfac) facEmisionMapClient.set(f.numfac, f.emision);
+    });
+
     let sumaDiasXImporte = 0;
     let sumaImportesPagados = 0;
     cobCliente.forEach(c => {
       const importe = parseFloat(c.importe || '0');
       if (importe < 0 && (c.tipo === 'CA' || c.tipo === 'AB')) { // Es un pago
         if (matchesYear(c.emision, year)) {
-          // Find original invoice to get its emision date
-          const original = cobCliente.find(oc => oc.numdoc === c.numdoc && oc.importe > 0);
-          if (original && original.emision && c.emision) {
-             const d1 = parseDate(original.emision);
+          // Find original invoice date from cobranzas or facturas_enc
+          const originalInCob = cobCliente.find(oc => oc.numdoc === c.numdoc && parseFloat(oc.importe || '0') > 0);
+          const fechaEmisionFac = (originalInCob && originalInCob.emision) ? originalInCob.emision : facEmisionMapClient.get(c.numdoc);
+          
+          if (fechaEmisionFac && c.emision) {
+             const d1 = parseDate(fechaEmisionFac);
              const d2 = parseDate(c.emision);
              if (d1 && d2) {
-               const diffTime = Math.abs(d2.getTime() - d1.getTime());
-               const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+               const diffTime = d2.getTime() - d1.getTime();
+               const diffDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
                sumaDiasXImporte += (diffDays * Math.abs(importe));
                sumaImportesPagados += Math.abs(importe);
              }
@@ -232,35 +411,44 @@ export async function getClientOverviewYear(codcli: string, year: number | strin
         }
       }
     });
-    const dias_pago_promedio = sumaImportesPagados > 0 ? sumaDiasXImporte / sumaImportesPagados : 0;
+    const dias_pago_promedio = sumaImportesPagados > 0 ? Math.round((sumaDiasXImporte / sumaImportesPagados) * 10) / 10 : 0;
 
-    // Mix Pagos (sólo del año en curso)
-    const pagosCliente = pagosDetalle.filter(p => p.codmovcli === codcli && parseFloat(p.importe || '0') > 0 && matchesYear(p.emision, year));
+    // Mix Pagos (sólo del año en curso) - Lógica unificada
     const mixMap = new Map<string, number>();
-    if (pagosCliente.length > 0) {
-      pagosCliente.forEach(p => {
-        const moneda = p.moneda || 'US$';
-        mixMap.set(moneda, (mixMap.get(moneda) || 0) + parseFloat(p.importe || '0'));
-      });
-    } else {
-      const cobClientePagos = cobCliente.filter(c => 
-        parseFloat(c.importe || '0') < 0 && 
-        (c.tipo === 'CA' || c.tipo === 'AB') &&
-        matchesYear(c.emision, year)
-      );
-      cobClientePagos.forEach(c => {
-        const isBs = c.numdoc && c.numdoc.startsWith('000');
-        const moneda = isBs ? 'Bs.' : 'US$';
-        let val = Math.abs(parseFloat(c.importe || '0'));
-        if (isBs) {
-          const original = cobCliente.find(oc => oc.numdoc === c.numdoc && parseFloat(oc.importe || '0') > 0);
-          const fechaTasa = (original && original.emision) ? original.emision : c.emision;
-          const tasa = getTasa(fechaTasa);
-          if (tasa > 0) val = val / tasa;
-        }
-        mixMap.set(moneda, (mixMap.get(moneda) || 0) + val);
-      });
-    }
+    const processedDocKeys = new Set<string>();
+
+    // 1. Procesar registros de pagos_detalle
+    const pagosCliente = pagosDetalle.filter(p => p.codmovcli === codcli && parseFloat(p.importe || '0') > 0 && matchesYear(p.emision, year));
+    pagosCliente.forEach(p => {
+      let val = parseFloat(p.importe || '0');
+      const isBs = (p.numdoc && p.numdoc.startsWith('000')) || p.moneda === 'Bs.';
+      const moneda = isBs ? 'Bs.' : (p.moneda && p.moneda.trim() !== '' ? p.moneda : 'US$');
+      mixMap.set(moneda, (mixMap.get(moneda) || 0) + val);
+      if (p.numdoc) processedDocKeys.add(`${p.codmovcli}_${p.numdoc}`);
+    });
+
+    // 2. Complementar con cobranzas.txt para recibos/pagos no cargados en pagos_detalle
+    const cobClientePagos = cobCliente.filter(c => 
+      parseFloat(c.importe || '0') < 0 && 
+      (c.tipo === 'CA' || c.tipo === 'AB') &&
+      matchesYear(c.emision, year)
+    );
+    cobClientePagos.forEach(c => {
+      const key = `${c.numcli || c.codmovcli}_${c.numdoc}`;
+      if (processedDocKeys.has(key)) return;
+
+      const isBs = c.numdoc && c.numdoc.startsWith('000');
+      const moneda = isBs ? 'Bs.' : 'US$';
+      let val = Math.abs(parseFloat(c.importe || '0'));
+      if (isBs) {
+        const original = cobCliente.find(oc => oc.numdoc === c.numdoc && parseFloat(oc.importe || '0') > 0);
+        const fechaTasa = (original && original.emision) ? original.emision : c.emision;
+        const tasa = getTasa(fechaTasa);
+        if (tasa > 0) val = val / tasa;
+      }
+      mixMap.set(moneda, (mixMap.get(moneda) || 0) + val);
+    });
+
     const mix_pagos = Array.from(mixMap.entries()).map(([moneda, monto]) => ({ 
       moneda, 
       monto: Math.round(monto * 100) / 100 
@@ -314,9 +502,14 @@ export async function getClientOverviewYear(codcli: string, year: number | strin
 
     return {
       venta_total, tendencia_anual, porcentaje_cumplimiento, venta_items, pedidos_compra, pedido_promedio,
+      pedido_promedio_bqto, pedido_promedio_ccs,
       meta_venta, devoluciones_monto, devoluciones_items, devoluciones_pedidos,
       indice_dev_monto, indice_dev_items, indice_dev_pedidos,
-      descuento_ponderado, dias_pago_promedio, ultima_compra, deuda_actual, vencimiento_cxc,
+      descuento_ponderado, descuento_monto,
+      descuento_factura_ponderado, descuento_factura_monto,
+      descuento_pp_ponderado, descuento_pp_monto,
+      descuento_total_ponderado, descuento_total_monto,
+      dias_pago_promedio, ultima_compra, deuda_actual, vencimiento_cxc,
       ventas_mensuales, mix_pagos, estado_cuenta
     };
   } catch (error) {
@@ -336,8 +529,20 @@ function parseDate(dateStr: string) {
 
 export async function getClientHistorical(codcli: string, incluirInactivos: boolean = false) {
   try {
-    const facturas = await parseTxtFile('facturas_enc.txt');
-    const facCliente = facturas.filter(f => f.cliente === codcli && f.tipo !== 'NC' && (f.numfac && f.numfac.toUpperCase().startsWith('D')));
+    const [facturas, facturasRen, cobranzas, pagosDetalle] = await Promise.all([
+      parseTxtFile('facturas_enc.txt'),
+      parseTxtFile('facturas_ren.txt'),
+      parseTxtFile('cobranzas.txt'),
+      parseTxtFile('pagos_detalle.txt')
+    ]);
+    const facCliente = facturas.filter(f => f.cliente === codcli && isFacturaValida(f) && f.tipo !== 'NC' && (f.numfac && f.numfac.toUpperCase().startsWith('D')));
+    
+    const facturasNums = new Set(facCliente.map(f => f.numfac));
+    const facturasRenFiltrado = facturasRen.filter(r => facturasNums.has(r.numfac));
+    const itemsPorFactura = new Map<string, number>();
+    facturasRenFiltrado.forEach(r => {
+      itemsPorFactura.set(r.numfac, (itemsPorFactura.get(r.numfac) || 0) + parseFloat(r.cantidad || '0'));
+    });
     
     const resumenMap = new Map<number, any>();
     
@@ -352,7 +557,7 @@ export async function getClientHistorical(codcli: string, incluirInactivos: bool
       const data = resumenMap.get(anio)!;
       data.venta_total += parseFloat(f.tot_fac || '0');
       if (f.emision) data.pedidosSet.add(f.emision);
-      data.venta_items += 5;
+      data.venta_items += itemsPorFactura.get(f.numfac) || 0;
     });
 
     const resumen_anios = Array.from(resumenMap.values()).map(d => ({
@@ -361,15 +566,121 @@ export async function getClientHistorical(codcli: string, incluirInactivos: bool
     })).sort((a,b) => a.anio - b.anio);
     const venta_total_hist = resumen_anios.reduce((s, d) => s + d.venta_total, 0);
 
+    const cobCliente = cobranzas.filter((c: any) => (c.numcli || c.codmovcli) === codcli);
+    
+    const tasas = new Map<string, number>();
+    pagosDetalle.forEach(p => {
+      const emision = p.emision;
+      const tasa = parseFloat(p.tasadolar || '0');
+      if (tasa > 0 && emision) {
+        tasas.set(emision, tasa);
+      }
+    });
+    
+    const getTasa = (fecha: string) => {
+      if (!fecha) return 1;
+      if (tasas.has(fecha)) return tasas.get(fecha)!;
+      let bestDate = '';
+      for (const d of tasas.keys()) {
+        if (d <= fecha && d > bestDate) {
+          bestDate = d;
+        }
+      }
+      return bestDate ? tasas.get(bestDate)! : 1; 
+    };
+
+    const facturasCxc = new Map<string, any>();
+    cobCliente.forEach(c => {
+      if (!facturasCxc.has(c.numdoc)) {
+        facturasCxc.set(c.numdoc, { 
+          nota: c.numdoc, 
+          deuda_original: 0, 
+          abonado: 0, 
+          saldo: 0, 
+          emision: c.emision,
+          vencimiento: c.vence || c.emision 
+        });
+      }
+      const fac = facturasCxc.get(c.numdoc);
+      
+      let rawImporteStr = (c.importe || '0').replace(',', '.');
+      let importeRaw = parseFloat(rawImporteStr);
+      if (c.numdoc && c.numdoc.startsWith('000')) {
+        const original = cobCliente.find(oc => oc.numdoc === c.numdoc && parseFloat((oc.importe || '0').replace(',', '.')) > 0);
+        let fechaParaTasa = (original && original.emision) ? original.emision : c.emision;
+        if (fechaParaTasa && fechaParaTasa.includes('/')) {
+          const parts = fechaParaTasa.split('/');
+          if (parts.length === 3) fechaParaTasa = `${parts[2]}${parts[1].padStart(2,'0')}${parts[0].padStart(2,'0')}`;
+        }
+        const tasaDelDia = getTasa(fechaParaTasa);
+        if (tasaDelDia > 0) {
+          importeRaw = importeRaw / tasaDelDia;
+        }
+      }
+      const importe = importeRaw;
+
+      const tipoDoc = (c.tipo || '').trim().toUpperCase();
+      const val = Math.abs(importe);
+      
+      if (tipoDoc === 'FC' || tipoDoc === 'ND') {
+        fac.deuda_original += val;
+        fac.saldo += val;
+        fac.emision = c.emision;
+        fac.vencimiento = c.vence || c.emision;
+      } else {
+        fac.abonado += val;
+        fac.saldo -= val;
+      }
+    });
+
+    const refDate = new Date();
+    refDate.setHours(0,0,0,0);
+
+    const parseVenceDate = (venceStr: string) => {
+      if (!venceStr) return null;
+      let clean = venceStr.trim();
+      if (clean.includes('/')) {
+        const parts = clean.split('/');
+        if (parts.length === 3) clean = `${parts[2]}${parts[1].padStart(2,'0')}${parts[0].padStart(2,'0')}`;
+      } else if (clean.includes('-')) {
+        const parts = clean.substring(0, 10).split('-');
+        if (parts.length === 3) clean = `${parts[0]}${parts[1].padStart(2,'0')}${parts[2].padStart(2,'0')}`;
+      }
+      if (clean.length === 8) {
+        const y = parseInt(clean.substring(0, 4));
+        const m = parseInt(clean.substring(4, 6)) - 1;
+        const d = parseInt(clean.substring(6, 8));
+        return new Date(y, m, d);
+      }
+      return null;
+    };
+
+    const estado_cuenta = Array.from(facturasCxc.values())
+      .filter(f => f.saldo > 0.01)
+      .map(f => {
+        const venceDate = parseVenceDate(f.vencimiento);
+        let mora = 0;
+        if (venceDate) {
+          const diffTime = refDate.getTime() - venceDate.getTime();
+          mora = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        }
+        return { ...f, mora };
+      });
+
+    const deuda_actual = estado_cuenta.reduce((sum, f) => sum + f.saldo, 0);
+
     return {
       total_historico: {
         ...mockHistorico.total_historico,
         venta_total: venta_total_hist,
-        pedidos_compra: resumen_anios.reduce((s, d) => s + d.pedidos, 0)
+        pedidos_compra: resumen_anios.reduce((s, d) => s + d.pedidos, 0),
+        deuda_actual,
+        estado_cuenta
       },
       resumen_anios
     };
   } catch (error) {
+    console.error("Error in getClientHistorical:", error);
     return mockHistorico;
   }
 }
@@ -393,6 +704,7 @@ export async function getGlobalOverviewYear(year: number | string, incluirInacti
     // 1. FACTURAS (Ventas)
     const facAnio = facturas.filter(f => 
       matchesYear(f.emision, year) &&
+      isFacturaValida(f) &&
       f.tipo !== 'NC' && (!inactivos.has(f.cliente)) &&
       (f.numfac && f.numfac.toUpperCase().startsWith('D'))
     );
@@ -402,20 +714,69 @@ export async function getGlobalOverviewYear(year: number | string, incluirInacti
     const pedidos_compra = new Set(facAnio.map(f => `${f.cliente}|${f.emision}`)).size;
     const pedido_promedio = pedidos_compra > 0 ? venta_total / pedidos_compra : 0;
     
+    const bqtoOrdersGlobal = new Map<string, number>();
+    const ccsOrdersGlobal = new Map<string, number>();
+    facAnio.forEach(f => {
+      const v = (f.codven || '').toUpperCase();
+      const amt = parseFloat(f.tot_fac || '0');
+      const pedId = `${f.cliente}|${f.emision}`;
+      if (v === '06' || v.startsWith('C')) {
+        ccsOrdersGlobal.set(pedId, (ccsOrdersGlobal.get(pedId) || 0) + amt);
+      } else {
+        bqtoOrdersGlobal.set(pedId, (bqtoOrdersGlobal.get(pedId) || 0) + amt);
+      }
+    });
+    const totalBqtoGlobal = Array.from(bqtoOrdersGlobal.values()).reduce((a, b) => a + b, 0);
+    const pedido_promedio_bqto = bqtoOrdersGlobal.size > 0 ? totalBqtoGlobal / bqtoOrdersGlobal.size : 0;
+    const totalCcsGlobal = Array.from(ccsOrdersGlobal.values()).reduce((a, b) => a + b, 0);
+    const pedido_promedio_ccs = ccsOrdersGlobal.size > 0 ? totalCcsGlobal / ccsOrdersGlobal.size : 0;
+    
     const facturasNums = new Set(facAnio.map(f => f.numfac));
     const facRenCliente = facturasRen.filter(r => facturasNums.has(r.numfac));
     const venta_items = facRenCliente.reduce((sum, r) => sum + parseFloat(r.cantidad || '0'), 0);
     
     let sumBruto = 0;
-    let sumNeto = 0;
+    let sumNetoLineas = 0;
     facRenCliente.forEach(r => {
       const cant = parseFloat(r.cantidad || '0');
       const precio = parseFloat(r.precio || '0');
       const tot = parseFloat(r.tot_ren || '0');
       sumBruto += (cant * precio);
-      sumNeto += tot;
+      sumNetoLineas += tot;
     });
-    const descuento_ponderado = sumBruto > 0 ? (100 - (sumNeto / sumBruto) * 100) : 0;
+    const descLineas = sumBruto > 0 ? (sumBruto - sumNetoLineas) : 0;
+
+    const devNumsSetGlobal = new Set(devoluciones.map(d => d.numdevo));
+    const ncDescuentosGlobal = facturas.filter(f => 
+      matchesYear(f.emision, year) && (!inactivos.has(f.cliente)) && isFacturaValida(f) &&
+      ((f.numfac && f.numfac.toUpperCase().startsWith('NC')) || f.tipo === 'NC') &&
+      !devNumsSetGlobal.has(f.numfac)
+    );
+    const descNCsGlobal = ncDescuentosGlobal.reduce((sum, f) => sum + Math.abs(parseFloat(f.tot_fac || '0')), 0);
+
+    const ncCobranzasGlobal = cobranzas.filter(c => {
+      if (inactivos.has(c.numcli || c.codmovcli) || c.tipo !== 'NC' || !matchesYear(c.emision, year)) return false;
+      const conc = (c.concepto || '').toUpperCase();
+      const ref = (c.refer || '').toUpperCase();
+      if (conc.includes('DEVOLUCION') || conc.includes('DEVO') || conc.includes('RETENCION') || conc.includes('IVA') || conc.includes('ISLR') || ref === 'NCCLIESP') {
+        return false;
+      }
+      return true;
+    });
+    const descNCsCobranzasGlobal = ncCobranzasGlobal.reduce((sum, c) => sum + Math.abs(parseFloat(c.importe || '0')), 0);
+
+    const descuento_factura_monto = Math.round((descLineas + descNCsGlobal) * 100) / 100;
+    const descuento_pp_monto = Math.round(descNCsCobranzasGlobal * 100) / 100;
+    const descuento_total_monto = Math.round((descuento_factura_monto + descuento_pp_monto) * 100) / 100;
+
+    const baseDenominador = sumBruto > 0 ? sumBruto : (venta_total > 0 ? venta_total : 1);
+
+    const descuento_factura_ponderado = Math.min(100, Math.round(((descuento_factura_monto / baseDenominador) * 100) * 100) / 100);
+    const descuento_pp_ponderado = Math.min(100, Math.round(((descuento_pp_monto / baseDenominador) * 100) * 100) / 100);
+    const descuento_total_ponderado = Math.min(100, Math.round(((descuento_total_monto / baseDenominador) * 100) * 100) / 100);
+
+    const descuento_monto = descuento_factura_monto;
+    const descuento_ponderado = descuento_factura_ponderado;
 
     // 2. DEVOLUCIONES
     const devAnio = devoluciones.filter(d => 
@@ -434,7 +795,7 @@ export async function getGlobalOverviewYear(year: number | string, incluirInacti
     const indice_dev_pedidos = pedidos_compra > 0 ? (devoluciones_pedidos / pedidos_compra) * 100 : 0;
 
     // 3. COBRANZAS Y DEUDA
-    const cobValidos = cobranzas.filter(c => !inactivos.has(c.codmovcli));
+    const cobValidos = cobranzas.filter((c: any) => !inactivos.has(c.numcli || c.codmovcli));
     
     // Build exchange rate map
     const tasas = new Map<string, number>();
@@ -461,14 +822,28 @@ export async function getGlobalOverviewYear(year: number | string, incluirInacti
     const facturasCxc = new Map<string, any>();
     cobValidos.forEach(c => {
       if (!facturasCxc.has(c.numdoc)) {
-        facturasCxc.set(c.numdoc, { nota: c.numdoc, deuda_original: 0, abonado: 0, saldo: 0, vencimiento: c.vence || c.emision });
+        facturasCxc.set(c.numdoc, { 
+          nota: c.numdoc, 
+          deuda_original: 0, 
+          abonado: 0, 
+          saldo: 0, 
+          emision: c.emision,
+          vencimiento: c.vence || c.emision 
+        });
       }
       const fac = facturasCxc.get(c.numdoc);
 
-      let importeRaw = parseFloat(c.importe || '0');
+      // FIX: Replace comma with dot for parseFloat
+      let rawImporteStr = (c.importe || '0').replace(',', '.');
+      let importeRaw = parseFloat(rawImporteStr);
+      
       if (c.numdoc && c.numdoc.startsWith('000')) {
-        const original = cobValidos.find(oc => oc.numdoc === c.numdoc && oc.importe > 0);
-        const fechaParaTasa = (original && original.emision) ? original.emision : c.emision;
+        const original = cobValidos.find(oc => oc.numdoc === c.numdoc && parseFloat((oc.importe || '0').replace(',', '.')) > 0);
+        let fechaParaTasa = (original && original.emision) ? original.emision : c.emision;
+        if (fechaParaTasa && fechaParaTasa.includes('/')) {
+          const parts = fechaParaTasa.split('/');
+          if (parts.length === 3) fechaParaTasa = `${parts[2]}${parts[1].padStart(2,'0')}${parts[0].padStart(2,'0')}`;
+        }
         const tasaDelDia = getTasa(fechaParaTasa);
         if (tasaDelDia > 0) {
           importeRaw = importeRaw / tasaDelDia;
@@ -476,31 +851,75 @@ export async function getGlobalOverviewYear(year: number | string, incluirInacti
       }
       const importe = importeRaw;
 
-      if (importe > 0) {
-        fac.deuda_original += importe;
-        fac.saldo += importe;
+      const tipoDoc = (c.tipo || '').trim().toUpperCase();
+      const val = Math.abs(importe);
+      
+      if (tipoDoc === 'FC' || tipoDoc === 'ND') {
+        fac.deuda_original += val;
+        fac.saldo += val;
+        fac.emision = c.emision;
+        fac.vencimiento = c.vence || c.emision;
       } else {
-        fac.abonado += Math.abs(importe);
-        fac.saldo += importe;
+        fac.abonado += val;
+        fac.saldo -= val;
       }
     });
 
-    const estado_cuenta = Array.from(facturasCxc.values()).filter(f => f.saldo > 0.01);
+    const refDate = new Date();
+    refDate.setHours(0,0,0,0);
+
+    const parseVenceDate = (venceStr: string) => {
+      if (!venceStr) return null;
+      let clean = venceStr.trim();
+      if (clean.includes('/')) {
+        const parts = clean.split('/');
+        if (parts.length === 3) clean = `${parts[2]}${parts[1].padStart(2,'0')}${parts[0].padStart(2,'0')}`;
+      } else if (clean.includes('-')) {
+        const parts = clean.substring(0, 10).split('-');
+        if (parts.length === 3) clean = `${parts[0]}${parts[1].padStart(2,'0')}${parts[2].padStart(2,'0')}`;
+      }
+      if (clean.length === 8) {
+        const y = parseInt(clean.substring(0, 4));
+        const m = parseInt(clean.substring(4, 6)) - 1;
+        const d = parseInt(clean.substring(6, 8));
+        return new Date(y, m, d);
+      }
+      return null;
+    };
+
+    const estado_cuenta = Array.from(facturasCxc.values())
+      .filter(f => f.saldo > 0.01)
+      .map(f => {
+        const venceDate = parseVenceDate(f.vencimiento);
+        let mora = 0;
+        if (venceDate) {
+          const diffTime = refDate.getTime() - venceDate.getTime();
+          mora = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        }
+        return { ...f, mora };
+      });
     const deuda_actual = estado_cuenta.reduce((sum, f) => sum + f.saldo, 0);
     
+    const facEmisionMapGlobal = new Map<string, string>();
+    facturas.forEach(f => {
+      if (f.numfac) facEmisionMapGlobal.set(f.numfac, f.emision);
+    });
+
     let sumaDiasXImporte = 0;
     let sumaImportesPagados = 0;
     cobValidos.forEach(c => {
       const importe = parseFloat(c.importe || '0');
       if (importe < 0 && (c.tipo === 'CA' || c.tipo === 'AB')) { 
         if (matchesYear(c.emision, year)) {
-          const original = cobValidos.find(oc => oc.numdoc === c.numdoc && oc.importe > 0);
-          if (original && original.emision && c.emision) {
-             const d1 = parseDate(original.emision);
+          const originalInCob = cobValidos.find(oc => oc.numdoc === c.numdoc && parseFloat(oc.importe || '0') > 0);
+          const fechaEmisionFac = (originalInCob && originalInCob.emision) ? originalInCob.emision : facEmisionMapGlobal.get(c.numdoc);
+          
+          if (fechaEmisionFac && c.emision) {
+             const d1 = parseDate(fechaEmisionFac);
              const d2 = parseDate(c.emision);
              if (d1 && d2) {
-               const diffTime = Math.abs(d2.getTime() - d1.getTime());
-               const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+               const diffTime = d2.getTime() - d1.getTime();
+               const diffDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
                sumaDiasXImporte += (diffDays * Math.abs(importe));
                sumaImportesPagados += Math.abs(importe);
              }
@@ -508,35 +927,43 @@ export async function getGlobalOverviewYear(year: number | string, incluirInacti
         }
       }
     });
-    const dias_pago_promedio = sumaImportesPagados > 0 ? sumaDiasXImporte / sumaImportesPagados : 0;
+    const dias_pago_promedio = sumaImportesPagados > 0 ? Math.round((sumaDiasXImporte / sumaImportesPagados) * 10) / 10 : 0;
+
+    // Mix Pagos (Global) - Lógica unificada con cobranzas y pagos_detalle
+    const mixMapGlobal = new Map<string, number>();
+    const processedDocKeysGlobal = new Set<string>();
 
     const pagosValidos = pagosDetalle.filter(p => !inactivos.has(p.codmovcli) && parseFloat(p.importe || '0') > 0 && matchesYear(p.emision, year));
-    const mixMap = new Map<string, number>();
-    if (pagosValidos.length > 0) {
-      pagosValidos.forEach(p => {
-        const moneda = p.moneda || 'US$';
-        mixMap.set(moneda, (mixMap.get(moneda) || 0) + parseFloat(p.importe || '0'));
-      });
-    } else {
-      const cobValidosPagos = cobValidos.filter(c => 
-        parseFloat(c.importe || '0') < 0 && 
-        (c.tipo === 'CA' || c.tipo === 'AB') &&
-        matchesYear(c.emision, year)
-      );
-      cobValidosPagos.forEach(c => {
-        const isBs = c.numdoc && c.numdoc.startsWith('000');
-        const moneda = isBs ? 'Bs.' : 'US$';
-        let val = Math.abs(parseFloat(c.importe || '0'));
-        if (isBs) {
-          const original = cobValidos.find(oc => oc.numdoc === c.numdoc && parseFloat(oc.importe || '0') > 0);
-          const fechaTasa = (original && original.emision) ? original.emision : c.emision;
-          const tasa = getTasa(fechaTasa);
-          if (tasa > 0) val = val / tasa;
-        }
-        mixMap.set(moneda, (mixMap.get(moneda) || 0) + val);
-      });
-    }
-    const mix_pagos = Array.from(mixMap.entries()).map(([moneda, monto]) => ({
+    pagosValidos.forEach(p => {
+      let val = parseFloat(p.importe || '0');
+      const isBs = (p.numdoc && p.numdoc.startsWith('000')) || p.moneda === 'Bs.';
+      const moneda = isBs ? 'Bs.' : (p.moneda && p.moneda.trim() !== '' ? p.moneda : 'US$');
+      mixMapGlobal.set(moneda, (mixMapGlobal.get(moneda) || 0) + val);
+      if (p.codmovcli && p.numdoc) processedDocKeysGlobal.add(`${p.codmovcli}_${p.numdoc}`);
+    });
+
+    const cobValidosPagos = cobValidos.filter(c => 
+      parseFloat(c.importe || '0') < 0 && 
+      (c.tipo === 'CA' || c.tipo === 'AB') &&
+      matchesYear(c.emision, year)
+    );
+    cobValidosPagos.forEach(c => {
+      const key = `${c.numcli || c.codmovcli}_${c.numdoc}`;
+      if (processedDocKeysGlobal.has(key)) return;
+
+      const isBs = c.numdoc && c.numdoc.startsWith('000');
+      const moneda = isBs ? 'Bs.' : 'US$';
+      let val = Math.abs(parseFloat(c.importe || '0'));
+      if (isBs) {
+        const original = cobValidos.find((oc: any) => (oc.numcli || oc.codmovcli) === (c.numcli || c.codmovcli) && oc.numdoc === c.numdoc && parseFloat(oc.importe || '0') > 0);
+        const fechaTasa = (original && original.emision) ? original.emision : c.emision;
+        const tasa = getTasa(fechaTasa);
+        if (tasa > 0) val = val / tasa;
+      }
+      mixMapGlobal.set(moneda, (mixMapGlobal.get(moneda) || 0) + val);
+    });
+
+    const mix_pagos = Array.from(mixMapGlobal.entries()).map(([moneda, monto]) => ({
       moneda,
       monto: Math.round(monto * 100) / 100
     }));
@@ -586,9 +1013,14 @@ export async function getGlobalOverviewYear(year: number | string, incluirInacti
 
     return {
       venta_total, tendencia_anual, porcentaje_cumplimiento, venta_items, pedidos_compra, pedido_promedio,
+      pedido_promedio_bqto, pedido_promedio_ccs,
       meta_venta, devoluciones_monto, devoluciones_items, devoluciones_pedidos,
       indice_dev_monto, indice_dev_items, indice_dev_pedidos,
-      descuento_ponderado, dias_pago_promedio, ultima_compra: null, deuda_actual, vencimiento_cxc: null,
+      descuento_ponderado, descuento_monto,
+      descuento_factura_ponderado, descuento_factura_monto,
+      descuento_pp_ponderado, descuento_pp_monto,
+      descuento_total_ponderado, descuento_total_monto,
+      dias_pago_promedio, ultima_compra: null, deuda_actual, vencimiento_cxc: null,
       ventas_mensuales, mix_pagos, estado_cuenta: []
     };
   } catch (error) {
@@ -600,13 +1032,21 @@ export async function getGlobalOverviewYear(year: number | string, incluirInacti
 export async function getGlobalHistorical(incluirInactivos: boolean = false) {
   try {
     const facturas = await parseTxtFile('facturas_enc.txt');
+    const facturasRen = await parseTxtFile('facturas_ren.txt');
     
     let inactivos = new Set<string>();
     if (!incluirInactivos) {
       inactivos = await getInactiveClientsSet();
     }
 
-    const facCliente = facturas.filter(f => f.tipo !== 'NC' && (!inactivos.has(f.cliente)) && (f.numfac && f.numfac.toUpperCase().startsWith('D')));
+    const facCliente = facturas.filter(f => f.tipo !== 'NC' && isFacturaValida(f) && (!inactivos.has(f.cliente)) && (f.numfac && f.numfac.toUpperCase().startsWith('D')));
+    
+    const facturasNums = new Set(facCliente.map(f => f.numfac));
+    const facturasRenFiltrado = facturasRen.filter(r => facturasNums.has(r.numfac));
+    const itemsPorFactura = new Map<string, number>();
+    facturasRenFiltrado.forEach(r => {
+      itemsPorFactura.set(r.numfac, (itemsPorFactura.get(r.numfac) || 0) + parseFloat(r.cantidad || '0'));
+    });
     
     const resumenMap = new Map<number, any>();
     
@@ -621,7 +1061,7 @@ export async function getGlobalHistorical(incluirInactivos: boolean = false) {
       const data = resumenMap.get(anio)!;
       data.venta_total += parseFloat(f.tot_fac || '0');
       if (f.emision && f.cliente) data.pedidosSet.add(`${f.cliente}|${f.emision}`);
-      data.venta_items += 5;
+      data.venta_items += itemsPorFactura.get(f.numfac) || 0;
     });
 
     const resumen_anios = Array.from(resumenMap.values()).map(d => ({
@@ -667,6 +1107,7 @@ async function calculatePeriodStats(
   const facPeriodo = facturas.filter(f => {
     if (codcli !== 'GLOBAL' && f.cliente !== codcli) return false;
     if (codcli === 'GLOBAL' && inactivos.has(f.cliente)) return false;
+    if (!isFacturaValida(f)) return false;
     if (f.tipo === 'NC') return false;
     if (!f.numfac || !f.numfac.toUpperCase().startsWith('D')) return false;
     const em = normalizeDate(f.emision);
@@ -683,15 +1124,30 @@ async function calculatePeriodStats(
   const venta_items = facRenPeriodo.reduce((sum, r) => sum + parseFloat(r.cantidad || '0'), 0);
 
   let sumBruto = 0;
-  let sumNeto = 0;
+  let sumNetoLineas = 0;
   facRenPeriodo.forEach(r => {
     const cant = parseFloat(r.cantidad || '0');
     const precio = parseFloat(r.precio || '0');
     const tot = parseFloat(r.tot_ren || '0');
     sumBruto += (cant * precio);
-    sumNeto += tot;
+    sumNetoLineas += tot;
   });
-  const descuento_ponderado = sumBruto > 0 ? (100 - (sumNeto / sumBruto) * 100) : 0;
+  const descLineas = sumBruto > 0 ? (sumBruto - sumNetoLineas) : 0;
+
+  const devNumsSetPeriod = new Set(devoluciones.map(d => d.numdevo));
+  const ncDescuentosPeriod = facturas.filter(f => {
+    if (codcli !== 'GLOBAL' && f.cliente !== codcli) return false;
+    if (codcli === 'GLOBAL' && inactivos.has(f.cliente)) return false;
+    if (!isFacturaValida(f)) return false;
+    if (!((f.numfac && f.numfac.toUpperCase().startsWith('NC')) || f.tipo === 'NC')) return false;
+    if (devNumsSetPeriod.has(f.numfac)) return false;
+    const em = normalizeDate(f.emision);
+    return em >= normStart && em <= normEnd;
+  });
+  const descNCsPeriod = ncDescuentosPeriod.reduce((sum, f) => sum + Math.abs(parseFloat(f.tot_fac || '0')), 0);
+
+  const descuento_monto = Math.round((descLineas + descNCsPeriod) * 100) / 100;
+  const descuento_ponderado = sumBruto > 0 ? Math.min(100, Math.round(((descuento_monto / sumBruto) * 100) * 100) / 100) : 0;
 
   const devPeriodo = devoluciones.filter(d => {
     if (codcli !== 'GLOBAL' && d.cliente !== codcli) return false;
@@ -709,8 +1165,8 @@ async function calculatePeriodStats(
   const devoluciones_items = devRenPeriodo.reduce((sum, r) => sum + parseFloat(r.cantidad || '0'), 0);
 
   const cobCliente = cobranzas.filter(c => {
-    if (codcli !== 'GLOBAL' && c.codmovcli !== codcli) return false;
-    if (codcli === 'GLOBAL' && inactivos.has(c.codmovcli)) return false;
+    if (codcli !== 'GLOBAL' && (c.numcli || c.codmovcli) !== codcli) return false;
+    if (codcli === 'GLOBAL' && inactivos.has(c.numcli || c.codmovcli)) return false;
     return true;
   });
 
@@ -760,6 +1216,7 @@ async function calculatePeriodStats(
     devoluciones_pedidos,
     dias_pago,
     descuento_ponderado,
+    descuento_monto,
     mix_pagos
   };
 }
@@ -836,5 +1293,65 @@ export async function getClientComparison(
   } catch (error) {
     console.error("Error in getClientComparison:", error);
     return mockComparison;
+  }
+}
+
+export async function getClientStatement(
+  codcliParam: string,
+  year: number | string = 'todos'
+): Promise<ClientStatementRow[]> {
+  try {
+    const codcliTarget = decodeURIComponent(codcliParam).trim().toUpperCase();
+    const cobranzas = await parseTxtFile('cobranzas.txt');
+    
+    const statementRows: Omit<ClientStatementRow, 'saldo_progresivo'>[] = [];
+    
+    for (const row of cobranzas) {
+      if ((row.numcli || row.codmovcli) !== codcliTarget) continue;
+      if (!matchesYear(row.emision, year)) continue;
+      
+      const tipo = (row.tipo || '').trim().toUpperCase();
+      let importe = parseFloat((row.importe || '0').replace(',', '.'));
+      
+      // En cobranzas.txt las facturas (Cargos) vienen positivo y los pagos/NC (Abonos) negativo.
+      let cargo = 0;
+      let abono = 0;
+      const val = Math.abs(importe);
+      
+      if (tipo === 'FC' || tipo === 'ND') {
+        cargo = val;
+      } else {
+        abono = val;
+      }
+      
+      statementRows.push({
+        fecha: row.emision,
+        documento: row.numdoc || 'N/A',
+        tipo: tipo,
+        concepto: row.concepto || row.refer || 'N/A',
+        cargo: cargo,
+        abono: abono
+      });
+    }
+    
+    // Ordenar cronológicamente
+    statementRows.sort((a, b) => a.fecha.localeCompare(b.fecha));
+    
+    // Calcular saldo progresivo
+    let saldo = 0;
+    const result: ClientStatementRow[] = [];
+    
+    for (const row of statementRows) {
+      saldo = saldo + row.cargo - row.abono;
+      result.push({
+        ...row,
+        saldo_progresivo: saldo
+      });
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("Error obteniendo estado de cuenta del cliente", error);
+    return [];
   }
 }

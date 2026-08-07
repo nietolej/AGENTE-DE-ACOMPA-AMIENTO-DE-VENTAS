@@ -3,7 +3,7 @@ import path from 'path';
 
 // Utilidad para mantener un cache en memoria por request/tiempo para no leer el archivo cientos de veces
 const cache = new Map<string, { time: number, data: any[] }>();
-const CACHE_TTL = 1000 * 60; // 1 minuto de cache (evita relanzar FS por cada query interna)
+const CACHE_TTL = 0; // Force re-read every time (no cache)
 
 export async function parseTxtFile(filename: string): Promise<any[]> {
   const exportDir = path.join(process.cwd(), process.env.DATA_DIR || '../export');
@@ -20,7 +20,7 @@ export async function parseTxtFile(filename: string): Promise<any[]> {
     try {
       const items = await fs.readdir(exportDir, { withFileTypes: true });
       subdirs = items
-        .filter(item => item.isDirectory() && /^\d{4}$/.test(item.name))
+        .filter(item => item.isDirectory() && (item.name === '2025' || item.name === '2026'))
         .map(item => item.name);
     } catch(e) {
       console.warn("Could not read export directory:", e);
@@ -53,7 +53,7 @@ export async function parseTxtFile(filename: string): Promise<any[]> {
       if (lines.length === 0) continue;
 
       foundAny = true;
-      const currentHeaders = lines[0].split('|').map(h => h.trim());
+      const currentHeaders = lines[0].split('|').map(h => h.trim().toLowerCase());
       
       if (!headers) {
           headers = currentHeaders;
@@ -81,7 +81,8 @@ export async function parseTxtFile(filename: string): Promise<any[]> {
       'marcas.txt': 'codmar',
       'grupos.txt': 'codgrup',
       'proveedores.txt': 'codpro',
-      'almacenes.txt': 'codalm'
+      'almacenes.txt': 'codalm',
+      'inventario.txt': 'codart'
     };
     
     const pk = primaryKeys[filename];

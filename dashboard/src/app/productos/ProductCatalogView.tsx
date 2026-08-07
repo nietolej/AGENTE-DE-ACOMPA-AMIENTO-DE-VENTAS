@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { KpiCard } from '@/components/ui/KpiCard';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Package, Search, ArrowUpDown, Filter, Download, Layers, List } from 'lucide-react';
@@ -87,7 +89,7 @@ export default function ProductCatalogView({
             Unidades Vendidas
           </div>
           <div style={{ fontSize: '1.8rem', fontWeight: 700 }}>
-            {totalCantidadVendida.toLocaleString()} <span style={{ fontSize: '0.9rem', color: 'var(--text-sub)' }}>unid.</span>
+            {totalCantidadVendida.toLocaleString('en-US')} <span style={{ fontSize: '0.9rem', color: 'var(--text-sub)' }}>unid.</span>
           </div>
         </div>
 
@@ -100,7 +102,7 @@ export default function ProductCatalogView({
           </div>
           {productoEstrella && (
             <div style={{ fontSize: '0.85rem', color: 'var(--accent-primary)', marginTop: '0.25rem' }}>
-              ${productoEstrella.monto_vendido.toLocaleString()} ({productoEstrella.cantidad_vendida} unid.)
+              ${productoEstrella.monto_vendido.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({productoEstrella.cantidad_vendida.toLocaleString('en-US')} unid.)
             </div>
           )}
         </div>
@@ -259,99 +261,76 @@ export default function ProductCatalogView({
           {/* Tabla Catálogo de Productos */}
           <div className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
-                <thead>
-                  <tr style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                    <th style={{ padding: '1rem' }}>Código</th>
-                    <th style={{ padding: '1rem' }}>Descripción del Producto</th>
-                    <th style={{ padding: '1rem' }}>Grupo / Marca</th>
-                    <th style={{ padding: '1rem', textAlign: 'right' }}>Precio A</th>
-                    <th style={{ padding: '1rem', textAlign: 'right' }}>Stock Actual</th>
-                    <th style={{ padding: '1rem', textAlign: 'right' }}>Unid. Vendidas</th>
-                    <th style={{ padding: '1rem', textAlign: 'right' }}>Monto Vendido ($)</th>
-                    <th style={{ padding: '1rem', textAlign: 'right' }}>Devoluciones ($)</th>
-                    <th style={{ padding: '1rem', textAlign: 'center' }}>Acción</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Código</TableHead>
+                    <TableHead>Descripción del Producto</TableHead>
+                    <TableHead>Grupo / Marca</TableHead>
+                    <TableHead className="text-right">Precio A</TableHead>
+                    <TableHead className="text-right">Stock Actual</TableHead>
+                    <TableHead className="text-right">Unid. Vendidas</TableHead>
+                    <TableHead className="text-right">Monto Vendido ($)</TableHead>
+                    <TableHead className="text-right">Devoluciones ($)</TableHead>
+                    <TableHead className="text-center">Acción</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {productos.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                    <TableRow>
+                      <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                         No se encontraron productos que coincidan con la búsqueda.
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     productos.map((prod, idx) => {
                       const encodedCod = encodeURIComponent(prod.codart);
                       return (
-                        <tr
-                          key={`${prod.codart}-${idx}`}
-                          style={{
-                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                            transition: 'background 0.15s ease'
-                          }}
-                        >
-                          <td style={{ padding: '1rem', fontFamily: 'var(--font-geist-mono)', fontWeight: 600 }}>
-                            <Link href={`/productos/${encodedCod}`} style={{ color: 'var(--accent-primary)', textDecoration: 'none' }}>
+                        <TableRow key={`${prod.codart}-${idx}`}>
+                          <TableCell className="font-mono font-medium">
+                            <Link href={`/productos/${encodedCod}`} className="text-primary hover:underline">
                               {prod.codart}
                             </Link>
-                          </td>
-                          <td style={{ padding: '1rem', fontWeight: 500, maxWidth: '280px' }}>
-                            <Link href={`/productos/${encodedCod}`} style={{ color: '#fff', textDecoration: 'none' }}>
+                          </TableCell>
+                          <TableCell className="font-medium max-w-[280px]">
+                            <Link href={`/productos/${encodedCod}`} className="hover:underline">
                               {prod.nomart}
                             </Link>
-                          </td>
-                          <td style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
                             {prod.grupo || 'GENÉRICO'} {prod.marca ? `• ${prod.marca}` : ''}
-                          </td>
-                          <td style={{ padding: '1rem', textAlign: 'right', fontFamily: 'var(--font-geist-mono)' }}>
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
                             ${prod.precio_a.toFixed(2)}
-                          </td>
-                          <td style={{ padding: '1rem', textAlign: 'right' }}>
-                            <span style={{
-                              padding: '0.25rem 0.5rem',
-                              borderRadius: '4px',
-                              fontSize: '0.8rem',
-                              fontWeight: 600,
-                              backgroundColor: prod.stock_actual > 20 ? 'rgba(34, 197, 94, 0.15)' : prod.stock_actual > 0 ? 'rgba(234, 179, 8, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                              color: prod.stock_actual > 20 ? '#4ade80' : prod.stock_actual > 0 ? '#fde047' : '#f87171',
-                              border: prod.stock_actual > 20 ? '1px solid rgba(34, 197, 94, 0.3)' : prod.stock_actual > 0 ? '1px solid rgba(234, 179, 8, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)'
-                            }}>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold ${prod.stock_actual > 20 ? 'bg-emerald-500/10 text-emerald-500' : prod.stock_actual > 0 ? 'bg-amber-500/10 text-amber-500' : 'bg-destructive/10 text-destructive'}`}>
                               {prod.stock_actual} unid.
                             </span>
-                          </td>
-                          <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 600 }}>
-                            {prod.cantidad_vendida.toLocaleString()}
-                          </td>
-                          <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: 'var(--accent-primary)' }}>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {prod.cantidad_vendida.toLocaleString('en-US')}
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-primary">
                             ${prod.monto_vendido.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </td>
-                          <td style={{ padding: '1rem', textAlign: 'right', color: prod.devoluciones_monto > 0 ? '#f87171' : 'var(--text-secondary)' }}>
-                            {prod.devoluciones_monto > 0 ? `$${prod.devoluciones_monto.toLocaleString()}` : '$0.00'}
-                          </td>
-                          <td style={{ padding: '1rem', textAlign: 'center' }}>
+                          </TableCell>
+                          <TableCell className={`text-right ${prod.devoluciones_monto > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                            {prod.devoluciones_monto > 0 ? `$${prod.devoluciones_monto.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0.00'}
+                          </TableCell>
+                          <TableCell className="text-center">
                             <Link
                               href={`/productos/${encodedCod}`}
-                              style={{
-                                display: 'inline-block',
-                                backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                                color: '#fff',
-                                padding: '0.35rem 0.75rem',
-                                borderRadius: '6px',
-                                fontSize: '0.8rem',
-                                fontWeight: 600,
-                                textDecoration: 'none'
-                              }}
+                              className="inline-flex items-center justify-center rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/80 h-8 px-3"
                             >
                               Ver Ficha →
                             </Link>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       );
                     })
                   )}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </div>
         </>
@@ -405,13 +384,13 @@ export default function ProductCatalogView({
                         </span>
                       </td>
                       <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 600 }}>
-                        {g.cantidad_vendida.toLocaleString()}
+                        {g.cantidad_vendida.toLocaleString('en-US')}
                       </td>
                       <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 700, color: 'var(--accent-primary)' }}>
                         ${g.monto_vendido.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td style={{ padding: '1rem', textAlign: 'right', color: g.devoluciones_monto > 0 ? '#f87171' : 'var(--text-secondary)' }}>
-                        {g.devoluciones_monto > 0 ? `$${g.devoluciones_monto.toLocaleString()}` : '$0.00'}
+                        {g.devoluciones_monto > 0 ? `$${g.devoluciones_monto.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0.00'}
                       </td>
                       <td style={{ padding: '1rem', fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '240px' }}>
                         {g.producto_lider}

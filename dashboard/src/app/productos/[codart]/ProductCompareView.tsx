@@ -48,6 +48,17 @@ export default function ProductCompareView({ data, yearA, yearB }: Props) {
   const chartData = Array.from(monthsMap.values());
 
   const renderDelta = (abs: number, pct: number, isCurrency: boolean = false, isNegativeGood: boolean = false) => {
+    if (isNaN(pct) || !isFinite(pct)) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600, marginTop: '0.35rem' }}>
+          <span>N/D</span>
+          <span style={{ color: 'var(--text-secondary)', fontWeight: 400, marginLeft: '0.25rem' }}>
+            (Sin histórico)
+          </span>
+        </div>
+      );
+    }
+
     const isPositive = pct > 0;
     const isGood = isNegativeGood ? !isPositive : isPositive;
     const color = isGood ? '#4ade80' : pct === 0 ? 'var(--text-secondary)' : '#f87171';
@@ -58,7 +69,7 @@ export default function ProductCompareView({ data, yearA, yearB }: Props) {
         <Icon size={14} />
         <span>{pct > 0 ? `+${pct}%` : `${pct}%`}</span>
         <span style={{ color: 'var(--text-secondary)', fontWeight: 400, marginLeft: '0.25rem' }}>
-          ({abs > 0 ? `+` : ''}{isCurrency ? `$${abs.toLocaleString()}` : abs})
+          ({abs > 0 ? `+` : ''}{isCurrency ? `$${abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : abs.toLocaleString('en-US')})
         </span>
       </div>
     );
@@ -115,11 +126,11 @@ export default function ProductCompareView({ data, yearA, yearB }: Props) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{yearA}: </span>
-              <span style={{ fontWeight: 600 }}>${data.periodoA.monto_vendido.toLocaleString()}</span>
+              <span style={{ fontWeight: 600 }}>${data.periodoA.monto_vendido.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
             <div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{yearB}: </span>
-              <span style={{ fontWeight: 700, color: 'var(--accent-primary)', fontSize: '1.1rem' }}>${data.periodoB.monto_vendido.toLocaleString()}</span>
+              <span style={{ fontWeight: 700, color: 'var(--accent-primary)', fontSize: '1.1rem' }}>${data.periodoB.monto_vendido.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
           </div>
           {renderDelta(data.varianza.monto_abs, data.varianza.monto_pct, true)}
@@ -134,11 +145,11 @@ export default function ProductCompareView({ data, yearA, yearB }: Props) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{yearA}: </span>
-              <span style={{ fontWeight: 600 }}>{data.periodoA.cantidad_vendida.toLocaleString()}</span>
+              <span style={{ fontWeight: 600 }}>{data.periodoA.cantidad_vendida.toLocaleString('en-US')}</span>
             </div>
             <div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{yearB}: </span>
-              <span style={{ fontWeight: 700, color: '#60a5fa', fontSize: '1.1rem' }}>{data.periodoB.cantidad_vendida.toLocaleString()}</span>
+              <span style={{ fontWeight: 700, color: '#60a5fa', fontSize: '1.1rem' }}>{data.periodoB.cantidad_vendida.toLocaleString('en-US')}</span>
             </div>
           </div>
           {renderDelta(data.varianza.cantidad_abs, data.varianza.cantidad_pct, false)}
@@ -172,11 +183,11 @@ export default function ProductCompareView({ data, yearA, yearB }: Props) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{yearA}: </span>
-              <span style={{ fontWeight: 600 }}>${data.periodoA.devoluciones_monto.toLocaleString()}</span>
+              <span style={{ fontWeight: 600 }}>${data.periodoA.devoluciones_monto.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
             <div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{yearB}: </span>
-              <span style={{ fontWeight: 700, color: '#f87171', fontSize: '1.1rem' }}>${data.periodoB.devoluciones_monto.toLocaleString()}</span>
+              <span style={{ fontWeight: 700, color: '#f87171', fontSize: '1.1rem' }}>${data.periodoB.devoluciones_monto.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
           </div>
           {renderDelta(data.varianza.devoluciones_abs, data.varianza.devoluciones_pct, true, true)}
@@ -197,7 +208,7 @@ export default function ProductCompareView({ data, yearA, yearB }: Props) {
               <YAxis stroke="var(--text-secondary)" fontSize={12} />
               <RechartsTooltip
                 contentStyle={{ backgroundColor: '#18181b', borderColor: '#3f3f46', borderRadius: '8px', color: '#fff' }}
-                formatter={(value: any, name: any) => [`$${Number(value).toLocaleString()}`, name === 'montoA' ? `Año ${yearA}` : `Año ${yearB}`]}
+                formatter={(value: any, name: any) => [`$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, name === 'montoA' ? `Año ${yearA}` : `Año ${yearB}`]}
               />
               <Legend formatter={(value) => value === 'montoA' ? `Año ${yearA}` : `Año ${yearB}`} />
               <Bar dataKey="montoA" fill="#3b82f6" opacity={0.6} radius={[4, 4, 0, 0]} name="montoA" />

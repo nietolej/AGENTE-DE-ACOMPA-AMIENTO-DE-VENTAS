@@ -10,6 +10,12 @@ function matchesYear(emisionDateStr: string | null | undefined, yearParam: numbe
   return selectedYears.includes(emisionYear);
 }
 
+function isFacturaValida(f: any): boolean {
+  if (!f) return false;
+  const anulada = String(f.anulada).toLowerCase();
+  return anulada !== 'true' && anulada !== 't' && anulada !== '1';
+}
+
 const ADMIN_CODES = new Set(['00', 'C1', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'D0', 'D1', 'D2', '12']);
 
 export async function getVendedoresList(
@@ -57,10 +63,12 @@ export async function getVendedoresList(
     // Identificar facturas válidas y procesar ventas por vendedor
     const vendorClientsSet = new Map<string, Set<string>>();
     const vendorFacturasSet = new Map<string, Set<string>>();
+    const vendorClientSales = new Map<string, Map<string, number>>();
 
     for (const f of facturas_enc) {
       if (f.tipo === 'NC') continue;
       if (!f.numfac || !f.numfac.toUpperCase().startsWith('D')) continue;
+      if (!isFacturaValida(f)) continue;
       if (!matchesYear(f.emision, year)) continue;
       if (inactivos.has(f.cliente)) continue;
 
@@ -91,10 +99,16 @@ export async function getVendedoresList(
       }
 
 
-      vData.venta_total += parseFloat(f.tot_fac || '0');
+      const amt = parseFloat(f.tot_fac || '0');
+      vData.venta_total += amt;
 
       if (!vendorClientsSet.has(codven)) vendorClientsSet.set(codven, new Set());
-      if (f.cliente) vendorClientsSet.get(codven)!.add(f.cliente);
+      if (f.cliente) {
+        vendorClientsSet.get(codven)!.add(f.cliente);
+        if (!vendorClientSales.has(codven)) vendorClientSales.set(codven, new Map());
+        const cMap = vendorClientSales.get(codven)!;
+        cMap.set(f.cliente, (cMap.get(f.cliente) || 0) + amt);
+      }
 
       if (!vendorFacturasSet.has(codven)) vendorFacturasSet.set(codven, new Set());
       if (f.numfac) vendorFacturasSet.get(codven)!.add(f.numfac);
@@ -135,6 +149,14 @@ export async function getVendedoresList(
       // Meta estimada ($15,000 / año como base si no hay explicita)
       const meta_venta = year === 'todos' ? 30000 : 15000;
       const pct_cumplimiento = meta_venta > 0 ? (v.venta_total / meta_venta) * 100 : 0;
+      
+      let concentracion_top3 = 0;
+      const cSalesMap = vendorClientSales.get(v.codvend);
+      if (cSalesMap && v.venta_total > 0) {
+        const sortedSales = Array.from(cSalesMap.values()).sort((a, b) => b - a);
+        const top3 = sortedSales.slice(0, 3).reduce((sum, val) => sum + val, 0);
+        concentracion_top3 = (top3 / v.venta_total) * 100;
+      }
 
       return {
         ...v,
@@ -142,7 +164,7 @@ export async function getVendedoresList(
         cant_facturas,
         clientes_atendidos,
         cobertura_cartera: Math.round(cobertura_cartera * 10) / 10,
-        concentracion_top3: 35.0, // Estimación general promedio
+        concentracion_top3: Math.round(concentracion_top3 * 10) / 10,
         devoluciones_monto: Math.round(v.devoluciones_monto * 100) / 100,
         pct_devoluciones: Math.round(pct_devoluciones * 10) / 10,
         meta_venta,
@@ -206,10 +228,13 @@ export async function getVendedorDetail(
       if (c.codcli) clientMap.set(c.codcli, c.nomcli || c.codcli);
     }
 
-    const prodMap = new Map<string, string>();
+    const prodMap = new Map<string, { nomart: string, grupo: string }>();
     for (const p of inventario) {
       const cod = (p.codart || p.item || '').trim().toUpperCase();
-      if (cod) prodMap.set(cod, p.nomart || p.descrip || cod);
+      if (cod) prodMap.set(cod, { 
+        nomart: p.nomart || p.descrip || cod,
+        grupo: p.grupo || 'GENÉRICO'
+      });
     }
 
     const vMaster = vendedores.find(v => (v.codven || v.codigo || '').trim().toUpperCase() === codTarget);
@@ -228,6 +253,7 @@ export async function getVendedorDetail(
     for (const f of facturas_enc) {
       if (f.tipo === 'NC') continue;
       if (!f.numfac || !f.numfac.toUpperCase().startsWith('D')) continue;
+      if (!isFacturaValida(f)) continue;
       if (!matchesYear(f.emision, year)) continue;
       if (inactivos.has(f.cliente)) continue;
 
@@ -305,7 +331,16 @@ export async function getVendedorDetail(
     const pct_pedidos_devo = cant_facturas > 0 ? (num_pedidos_afectados / cant_facturas) * 100 : 0;
 
     // Tendencia YTD
-    const diasVentana = year === 'todos' ? 730 : 365;
+    let diasVentana = 365;
+    if (year === 'todos') {
+      diasVentana = 730;
+    } else {
+      const today = new Date();
+      if (parseInt(year.toString()) === today.getFullYear()) {
+        const start = new Date(today.getFullYear(), 0, 1);
+        diasVentana = Math.max(1, Math.ceil((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+      }
+    }
     const tendencia_anual = (venta_total / diasVentana) * 365;
     const meta_venta = year === 'todos' ? 30000 : 15000;
     const pct_cumplimiento = meta_venta > 0 ? (venta_total / meta_venta) * 100 : 0;
@@ -370,7 +405,8 @@ export async function getVendedorDetail(
 
     // Calcular Clientes Dormidos / En Riesgo (>45 días sin compra o sin compras en período)
     const clientes_dormidos: VendorDormantClient[] = [];
-    const todayStr = '20260728'; // Fecha de referencia del sistema
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
 
     for (const [codcli, cData] of assignedClientsMap.entries()) {
       // Si el cliente no compró en la lista de facturas activas del período
@@ -383,8 +419,7 @@ export async function getVendedorDetail(
           const m = parseInt(cData.ultima_compra.substring(4, 6)) - 1;
           const d = parseInt(cData.ultima_compra.substring(6, 8));
           const lastDate = new Date(y, m, d);
-          const refDate = new Date(2026, 6, 28);
-          const diffTime = Math.abs(refDate.getTime() - lastDate.getTime());
+          const diffTime = Math.abs(today.getTime() - lastDate.getTime());
           dias_sin_comprar = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
           lastDateFormatted = `${cData.ultima_compra.substring(0, 4)}-${cData.ultima_compra.substring(4, 6)}-${cData.ultima_compra.substring(6, 8)}`;
         }
@@ -406,7 +441,7 @@ export async function getVendedorDetail(
     for (const r of facturas_ren) {
       if (!validFacturas.has(r.numfac)) continue;
       const codart = (r.codart || r.item || '').trim().toUpperCase();
-      const group = prodMap.get(codart) || 'GENÉRICO';
+      const group = prodMap.get(codart)?.grupo || 'GENÉRICO';
 
       if (!invoiceGroupsMap.has(r.numfac)) invoiceGroupsMap.set(r.numfac, new Set());
       invoiceGroupsMap.get(r.numfac)!.add(group);
@@ -423,7 +458,7 @@ export async function getVendedorDetail(
     const top_productos: VendorTopProduct[] = Array.from(productSalesMap.entries())
       .map(([codart, data]) => ({
         codart,
-        nomart: prodMap.get(codart) || codart,
+        nomart: prodMap.get(codart)?.nomart || codart,
         cantidad_vendida: Math.round(data.cantidad * 100) / 100,
         monto_vendido: Math.round(data.monto * 100) / 100,
       }))

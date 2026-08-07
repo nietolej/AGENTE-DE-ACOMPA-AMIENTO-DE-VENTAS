@@ -24,5 +24,5 @@ Usa estos datos como la fuente de la verdad para tu análisis. No inventes núme
     messages,
   });
 
-  return result.toDataStreamResponse();
+  return result.toTextStreamResponse();
 }

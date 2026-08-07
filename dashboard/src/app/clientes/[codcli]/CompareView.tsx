@@ -3,9 +3,10 @@
 import React, { useState } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
-import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, Legend, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { ComparisonData, formatDateDisplay } from '@/lib/types';
 import { StatementTable } from '@/components/ui/StatementTable';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#a288fe'];
 
@@ -36,6 +37,18 @@ export default function CompareView({ data }: { data: ComparisonData }) {
 
   // Helpers para calcular varianzas visuales
   const renderVarianza = (abs: number, pct: number, isGoodWhenUp: boolean = true) => {
+    if (isNaN(pct) || !isFinite(pct)) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>
+          <Minus size={16} />
+          <span>N/D</span>
+          <span style={{ fontSize: '0.8em', opacity: 0.8, marginLeft: '0.25rem' }}>
+            (Sin histórico)
+          </span>
+        </div>
+      );
+    }
+
     let isPositive = pct > 0;
     if (!isGoodWhenUp) isPositive = pct < 0; // Para devoluciones y mora, bajar es bueno.
     const isNeutral = pct === 0;
@@ -185,26 +198,48 @@ export default function CompareView({ data }: { data: ComparisonData }) {
         {/* Índices de Devolución */}
         <div className="glass-panel">
           <h3 className="text-sub" style={{ marginBottom: '1rem', fontSize: '0.95rem' }}>Índices de Devolución</h3>
-          <table style={{ width: '100%', fontSize: '0.9rem', textAlign: 'center' }}>
-            <thead>
-              <tr style={{ color: 'var(--text-secondary)' }}>
-                <th>Tipo</th><th>Periodo A</th><th>Periodo B</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td style={{ textAlign: 'left', padding: '0.2rem 0' }}>En $</td><td>{iDevMontoA.toFixed(1)}%</td><td>{iDevMontoB.toFixed(1)}%</td></tr>
-              <tr><td style={{ textAlign: 'left', padding: '0.2rem 0' }}>En Ítems</td><td>{iDevItemsA.toFixed(1)}%</td><td>{iDevItemsB.toFixed(1)}%</td></tr>
-              <tr><td style={{ textAlign: 'left', padding: '0.2rem 0' }}>En Pedidos</td><td>{iDevPedidosA.toFixed(1)}%</td><td>{iDevPedidosB.toFixed(1)}%</td></tr>
-            </tbody>
-          </table>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tipo</TableHead>
+                <TableHead className="text-center">Periodo A</TableHead>
+                <TableHead className="text-center">Periodo B</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell className="font-semibold">En $</TableCell>
+                <TableCell className="text-center">{iDevMontoA.toFixed(1)}%</TableCell>
+                <TableCell className="text-center">{iDevMontoB.toFixed(1)}%</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-semibold">En Ítems</TableCell>
+                <TableCell className="text-center">{iDevItemsA.toFixed(1)}%</TableCell>
+                <TableCell className="text-center">{iDevItemsB.toFixed(1)}%</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-semibold">En Pedidos</TableCell>
+                <TableCell className="text-center">{iDevPedidosA.toFixed(1)}%</TableCell>
+                <TableCell className="text-center">{iDevPedidosB.toFixed(1)}%</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
 
         {/* Descuento Ponderado */}
         <div className="glass-panel">
           <h3 className="text-sub" style={{ marginBottom: '1rem', fontSize: '0.95rem' }}>Descuento Ponderado</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-            <div><p className="text-sub" style={{ fontSize: '0.8rem' }}>Periodo A</p><p style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{data.periodoA.descuento_ponderado.toFixed(1)}%</p></div>
-            <div><p className="text-sub" style={{ fontSize: '0.8rem' }}>Periodo B</p><p style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{data.periodoB.descuento_ponderado.toFixed(1)}%</p></div>
+            <div>
+              <p className="text-sub" style={{ fontSize: '0.8rem' }}>Periodo A</p>
+              <p style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{data.periodoA.descuento_ponderado.toFixed(2)}%</p>
+              <p className="text-sub" style={{ fontSize: '0.75rem' }}>(${ (data.periodoA.descuento_monto || 0).toLocaleString('en-US', {maximumFractionDigits: 2}) })</p>
+            </div>
+            <div>
+              <p className="text-sub" style={{ fontSize: '0.8rem' }}>Periodo B</p>
+              <p style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{data.periodoB.descuento_ponderado.toFixed(2)}%</p>
+              <p className="text-sub" style={{ fontSize: '0.75rem' }}>(${ (data.periodoB.descuento_monto || 0).toLocaleString('en-US', {maximumFractionDigits: 2}) })</p>
+            </div>
           </div>
           <div style={{ padding: '0.75rem', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: '4px' }}>
             {renderVarianza(data.varianza.descuento_ponderado_abs, data.varianza.descuento_ponderado_pct, false)}
@@ -234,10 +269,34 @@ export default function CompareView({ data }: { data: ComparisonData }) {
             <h4 className="text-sub">Periodo A</h4>
             <ResponsiveContainer>
               <PieChart>
-                <Pie data={data.periodoA.mix_pagos} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="monto" nameKey="moneda" label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}>
+                <Pie 
+                  data={data.periodoA.mix_pagos} 
+                  cx="50%" 
+                  cy="50%" 
+                  innerRadius={50} 
+                  outerRadius={85} 
+                  paddingAngle={5} 
+                  dataKey="monto" 
+                  nameKey="moneda" 
+                  label={({ name, value, percent }: { name?: string; value?: number; percent?: number }) => 
+                    `${name || ''}: $${(value || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })} (${((percent || 0) * 100).toFixed(1)}%)`
+                  }
+                >
                   {data.periodoA.mix_pagos.map((e: any, i: number) => <Cell key={`a-${i}`} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <RechartsTooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333' }} />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={36} 
+                  formatter={(value: any, entry: any) => {
+                    const item = entry.payload;
+                    const val = item?.monto ?? item?.value ?? item?.payload?.monto ?? item?.payload?.value ?? 0;
+                    return `${value}: $${Number(val).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+                  }}
+                />
+                <RechartsTooltip 
+                  formatter={(value: any) => [`$${Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Monto ($)']}
+                  contentStyle={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)' }} 
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -246,10 +305,34 @@ export default function CompareView({ data }: { data: ComparisonData }) {
             <h4 className="text-sub">Periodo B</h4>
             <ResponsiveContainer>
               <PieChart>
-                <Pie data={data.periodoB.mix_pagos} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="monto" nameKey="moneda" label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}>
+                <Pie 
+                  data={data.periodoB.mix_pagos} 
+                  cx="50%" 
+                  cy="50%" 
+                  innerRadius={50} 
+                  outerRadius={85} 
+                  paddingAngle={5} 
+                  dataKey="monto" 
+                  nameKey="moneda" 
+                  label={({ name, value, percent }: { name?: string; value?: number; percent?: number }) => 
+                    `${name || ''}: $${(value || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })} (${((percent || 0) * 100).toFixed(1)}%)`
+                  }
+                >
                   {data.periodoB.mix_pagos.map((e: any, i: number) => <Cell key={`b-${i}`} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <RechartsTooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333' }} />
+                <Legend 
+                  verticalAlign="bottom" 
+                  height={36} 
+                  formatter={(value: any, entry: any) => {
+                    const item = entry.payload;
+                    const val = item?.monto ?? item?.value ?? item?.payload?.monto ?? item?.payload?.value ?? 0;
+                    return `${value}: $${Number(val).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+                  }}
+                />
+                <RechartsTooltip 
+                  formatter={(value: any) => [`$${Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Monto ($)']}
+                  contentStyle={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)' }} 
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
